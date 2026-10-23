@@ -339,107 +339,10 @@ router.post("/sessions", async (req, res): Promise<void> => {
       res.status(400).json({ error: "A valid lecture is required for a question session." });
       return;
     }
-    const [priorProgress] = await db
-      .select()
-      .from(lectureProgressTable)
-      .where(and(eq(lectureProgressTable.clerkUserId, studentId), eq(lectureProgressTable.lectureId, lectureId)));
-    const [previousProgress] = lectureId > 1
-      ? await db
-          .select()
-          .from(lectureProgressTable)
-          .where(and(eq(lectureProgressTable.clerkUserId, studentId), eq(lectureProgressTable.lectureId, lectureId - 1)))
-      : [];
-    if (priorProgress?.status === "passed") {
-      res.status(403).json({ error: "This lecture has already been passed." });
-      return;
-    }
-    if (lectureId > 1 && previousProgress?.status !== "passed") {
-      res.status(403).json({ error: "This lecture is locked." });
-      return;
-    }
-    const previousSessions = await db
-      .select()
-      .from(oralSessionsTable)
-      .where(and(
-        eq(oralSessionsTable.clerkUserId, studentId),
-        eq(oralSessionsTable.mode, "lecture_questions"),
-        eq(oralSessionsTable.lectureId, lectureId),
-      ));
-    const maxAttempt = Math.max(0, ...previousSessions.map((item) => item.attempt));
-    if (attempt !== maxAttempt + 1 || (attempt > 2 && (!priorProgress?.nextRetakeAt || priorProgress.nextRetakeAt > new Date()))) {
-      res.status(403).json({ error: "The next lecture test attempt is not available yet." });
-      return;
-    }
-    if (attempt > 1) {
-      const previousScores = await db
-        .select()
-        .from(oralScoresTable)
-        .where(and(
-          eq(oralScoresTable.clerkUserId, studentId),
-          eq(oralScoresTable.kind, "lecture"),
-          eq(oralScoresTable.lectureId, lectureId),
-          eq(oralScoresTable.attempt, attempt - 1),
-        ));
-      const questionTotals = new Map<number, number>();
-      for (const score of previousScores) questionTotals.set(score.questionIndex, score.score);
-      if (questionTotals.size !== getInternalCourse().lectures[lectureId - 1].questions.length) {
-        res.status(403).json({ error: "Complete the current lecture test before starting another attempt." });
-        return;
-      }
-      const priorAttemptTotal = [...questionTotals.values()].reduce((sum, score) => sum + score, 0);
-      if (attempt === 2 && priorAttemptTotal >= 8) {
-        res.status(403).json({ error: "This lecture has already been passed." });
-        return;
-      }
-      if (attempt >= 3 && priorProgress?.nextRetakeAt && priorProgress.nextRetakeAt > new Date()) {
-        res.status(403).json({ error: `The next retake is available after ${priorProgress.nextRetakeAt.toISOString()}.` });
-        return;
-      }
-    }
   }
 
-  if (mode === "final_exam") {
-    const progressRows = await db
-      .select()
-      .from(lectureProgressTable)
-      .where(eq(lectureProgressTable.clerkUserId, studentId));
-    const allPassed = getInternalCourse().lectures.every((lecture) => {
-      const row = progressRows.find((item) => item.lectureId === lecture.id);
-      return row?.status === "passed";
-    });
-    if (!allPassed) {
-      res.status(403).json({ error: "Pass all five lecture question sets before beginning the final exam." });
-      return;
-    }
-    const examSessions = await db
-      .select()
-      .from(oralSessionsTable)
-      .where(and(eq(oralSessionsTable.clerkUserId, studentId), eq(oralSessionsTable.mode, "final_exam")));
-    const expectedAttempt = Math.max(0, ...examSessions.map((item) => item.attempt)) + 1;
-    if (attempt !== expectedAttempt || expectedAttempt > 2) {
-      res.status(403).json({ error: "The final exam attempt is unavailable." });
-      return;
-    }
-    if (expectedAttempt === 2) {
-      const first = examSessions.find((session) => session.attempt === 1);
-      const firstScores = await db
-        .select()
-        .from(oralScoresTable)
-        .where(and(
-          eq(oralScoresTable.clerkUserId, studentId),
-          eq(oralScoresTable.kind, "exam"),
-          eq(oralScoresTable.attempt, 1),
-        ));
-      if (firstScores.length < 5 || firstScores.reduce((sum, item) => sum + item.score, 0) >= 14) {
-        res.status(403).json({ error: "The final exam retake is available only after an unsuccessful first attempt." });
-        return;
-      }
-      if (!first || Date.now() < first.startedAt.getTime() + 48 * 60 * 60 * 1000) {
-        res.status(403).json({ error: "The final exam retake is available 48 hours after the first attempt." });
-        return;
-      }
-    }
-  }
+  // Assessments are directly accessible. Prerequisites, retry caps and cooldowns
+  // are deferred until the course's grading protocols are specified.
 
   let examPrompts = mode === "final_exam"
     ? getInternalCourse().finalExam.questions.map((question) => question.prompt)

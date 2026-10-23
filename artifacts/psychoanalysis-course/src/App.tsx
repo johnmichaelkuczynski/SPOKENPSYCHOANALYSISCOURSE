@@ -155,17 +155,20 @@ function Portal({ course }: { course: Course }) {
               const item = progress.lectures.find((p) => p.lectureId === lecture.id);
               const locked = item?.status === 'locked';
               const passed = item?.status === 'passed';
-              return <button key={lecture.id} disabled={locked} onClick={() => setLocation(`/lecture/${lecture.id}`)} className="w-full text-left grid grid-cols-[40px_1fr_auto] gap-3 items-center py-5 border-b border-[#dfdbd0] disabled:opacity-50" data-testid={`button-lecture-${lecture.id}`}>
+              return <div key={lecture.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 py-4 border-b border-[#dfdbd0]">
+                <button disabled={locked} onClick={() => setLocation(`/lecture/${lecture.id}`)} className="flex-1 min-w-[240px] text-left grid grid-cols-[40px_1fr_auto] gap-3 items-center py-1 disabled:opacity-50" data-testid={`button-lecture-${lecture.id}`}>
                 <span className="serif text-xl text-[#8d978f]">{String(i + 1).padStart(2, '0')}</span>
                 <span><span className="block serif text-xl text-[#2d403c]">{lecture.title}</span><span className="block mt-1 text-xs text-[#818980]">{passed ? 'Passed' : locked ? 'Locked' : item?.attempts ? `Attempt ${item.attempts}` : 'Available'}</span></span>
                 {locked ? <LockKeyhole size={16} className="text-[#a0a49b]" /> : passed ? <Check size={18} className="text-[#55766a]" /> : <ArrowRight size={17} className="text-[#55766a]" />}
-              </button>;
+                </button>
+                <Link href={`/lecture/${lecture.id}/questions`} className="secondary-action !px-4 !py-2 text-xs" data-testid={`link-assessment-${lecture.id}`}>Post-lecture assessment <ArrowRight size={14} /></Link>
+              </div>;
             })}
           </div>
-          <button disabled={!progress.examUnlocked} onClick={() => setLocation('/exam')} className="w-full text-left grid grid-cols-[40px_1fr_auto] gap-3 items-center py-5 border-b border-[#dfdbd0] disabled:opacity-50" data-testid="button-final-exam">
-            <span className="serif text-xl text-[#8d978f]">{String(lectures.length + 1).padStart(2, '0')}</span><span><span className="block serif text-xl text-[#2d403c]">Final oral exam</span><span className="block mt-1 text-xs text-[#818980]">{progress.examUnlocked ? 'Available' : `Complete all ${progress.lectureTotal} lecture tests to unlock`}</span></span>
-            {progress.examUnlocked ? <ArrowRight size={17} className="text-[#55766a]" /> : <LockKeyhole size={16} className="text-[#a0a49b]" />}
-          </button>
+          <Link href="/exam" className="w-full text-left grid grid-cols-[40px_1fr_auto] gap-3 items-center py-5 border-b border-[#dfdbd0]" data-testid="button-final-exam">
+            <span className="serif text-xl text-[#8d978f]">{String(lectures.length + 1).padStart(2, '0')}</span><span><span className="block serif text-xl text-[#2d403c]">Final oral exam</span><span className="block mt-1 text-xs text-[#818980]">Open directly · No prerequisites</span></span>
+            <ArrowRight size={17} className="text-[#55766a]" />
+          </Link>
           {openLecture && <button onClick={continueStudy} className="primary-action mt-7" disabled={updateProgress.isPending} data-testid="button-continue-study">{updateProgress.isPending ? 'Opening lecture…' : 'Continue studying'} <ArrowRight size={16} /></button>}
           {portalError && <p className="mt-3 text-sm text-[#a34b43]" role="alert">{portalError}</p>}
         </section>
@@ -609,6 +612,7 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
   const recorder = useOralRecorder();
   const speech = useProfessorSpeech();
   const [session, setSession] = useState<OralSession | null>(null);
+  const sessionOpeningFor = useRef<string | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [redoUsed, setRedoUsed] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -641,9 +645,7 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
       : 1;
   const activeAttempt = session?.attempt ?? attempt;
   const retryKey = `basic-tenets-lecture-${lectureId}-missed`;
-  const questionIndices = mode === 'lecture_questions' && activeAttempt === 2
-    ? (() => { try { return JSON.parse(sessionStorage.getItem(retryKey) ?? '[]') as number[]; } catch { return []; } })()
-    : questions.map((_, index) => index);
+  const questionIndices = questions.map((_, index) => index);
   const questionNumber = questionIndices[questionIndex] ?? questionIndex;
   const currentQuestion = mode === 'lecture_questions' ? questions[questionNumber] : questions[questionIndex];
   const currentPrompt = mode === 'lecture_questions' ? (currentQuestion as { question: string } | undefined)?.question : (currentQuestion as { prompt: string } | undefined)?.prompt;
@@ -655,10 +657,9 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
   useEffect(() => {
     if (courseQuery.isLoading || !course || sessionQuery.isLoading || sessionQuery.isError || (mode !== 'dialogue' && (progressQuery.isLoading || progressQuery.isError))) return;
     if (mode === 'dialogue' && sessionStorage.getItem('basic-tenets-active-test')) return;
-    if (mode === 'lecture_questions' && (!lecture || !lectureProgress || lectureProgress.status === 'locked' || lectureProgress.status === 'passed')) return;
-    if (mode === 'lecture_questions' && attempt > 1 && lectureProgress?.nextRetakeAt && Date.parse(lectureProgress.nextRetakeAt) > Date.now()) return;
-    if (mode === 'final_exam' && !progressQuery.data?.examUnlocked) return;
-    if (mode === 'final_exam' && (nextExamAttempt > 2 || (nextExamAttempt > 1 && progressQuery.data?.examRetakeAt && Date.parse(progressQuery.data.examRetakeAt) > Date.now()))) return;
+    if (mode === 'lecture_questions' && !lecture) return;
+    if (sessionOpeningFor.current === location) return;
+    sessionOpeningFor.current = location;
     if (mode === 'lecture_questions') sessionStorage.setItem('basic-tenets-active-test', `lecture_questions:${lectureId}`);
     if (mode === 'final_exam') sessionStorage.setItem('basic-tenets-active-test', 'final_exam');
     const sessionMode = mode === 'dialogue' ? 'dialogue' : mode === 'lecture_questions' ? 'lecture_questions' : 'final_exam';
@@ -667,10 +668,14 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
         setSession(newSession);
         cache.setQueryData<OralSession[]>(['/api/sessions'], (sessions) => [...(sessions ?? []), newSession]);
       },
+      onError: () => {
+        sessionOpeningFor.current = null;
+        setVoiceNotice('This assessment session could not be opened. Reload the assessment to try again.');
+      },
     });
     // Each URL represents a distinct oral session; avoid creating repeated sessions on re-renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, sessionQuery.isLoading]);
+  }, [location, sessionQuery.isLoading, sessionQuery.isError, courseQuery.isLoading, progressQuery.isLoading, progressQuery.isError]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -704,17 +709,8 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
 
   if (courseQuery.isLoading || progressQuery.isLoading) return <Loading label="Loading oral session" />;
   if (courseQuery.isError || !course || (mode !== 'dialogue' && progressQuery.isError)) return <div className="page-shell"><Header signedIn /><main className="content-column py-14"><QueryError retry={() => { courseQuery.refetch(); progressQuery.refetch(); }} /></main></div>;
-  if (mode === 'lecture_questions' && (!lecture || lectureProgress?.status === 'locked' || lectureProgress?.status === 'passed')) return <Redirect to="/" />;
+  if (mode === 'lecture_questions' && !lecture) return <Redirect to="/" />;
   if (sessionQuery.isError) return <div className="page-shell"><Header signedIn /><main className="content-column py-14"><QueryError retry={() => sessionQuery.refetch()} /></main></div>;
-  if (mode === 'lecture_questions' && activeAttempt > 1 && lectureProgress?.nextRetakeAt && Date.parse(lectureProgress.nextRetakeAt) > Date.now()) {
-    return <div className="page-shell"><Header signedIn /><main className="content-column py-16"><p className="eyebrow text-[#718078] mb-3">Assessment unavailable</p><h1 className="serif text-3xl mb-4">This lecture test cannot be started yet.</h1><p className="text-sm text-[#78817b] mb-7">Only one retry is available for missed questions. Check your course room for the next available assessment.</p><Link className="primary-action" href="/">Return to course room</Link></main></div>;
-  }
-  const examAttemptNumber = session?.mode === 'final_exam' ? session.attempt : nextExamAttempt;
-  const examRetakeIsLocked = mode === 'final_exam' && examAttemptNumber > 1 && !!progressQuery.data?.examRetakeAt && Date.parse(progressQuery.data.examRetakeAt) > Date.now();
-  if (mode === 'final_exam' && (examAttemptNumber > 2 || examRetakeIsLocked)) {
-    return <div className="page-shell"><Header signedIn /><main className="content-column py-16"><p className="eyebrow text-[#718078] mb-3">Final examination</p><h1 className="serif text-3xl mb-4">The final exam is not available yet.</h1><p className="text-sm text-[#78817b] mb-7">{examRetakeIsLocked ? `A retake is available after ${new Date(progressQuery.data!.examRetakeAt!).toLocaleString()}.` : 'The one permitted retake has already been used.'}</p><Link className="primary-action" href="/">Return to course room</Link></main></div>;
-  }
-  if (mode === 'final_exam' && !progressQuery.data?.examUnlocked) return <Redirect to="/" />;
   if (mode === 'dialogue' && sessionStorage.getItem('basic-tenets-active-test')) {
     const activeTest = sessionStorage.getItem('basic-tenets-active-test')!;
     const returnPath = activeTest === 'final_exam' ? '/exam' : `/lecture/${activeTest.split(':')[1]}/questions`;
