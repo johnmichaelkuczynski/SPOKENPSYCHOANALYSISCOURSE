@@ -579,11 +579,6 @@ function useOralRecorder() {
     captureRef.current = null;
     setRecording(false);
   }, [releaseCapture]);
-  useEffect(() => {
-    const stopOnBlur = () => stop();
-    window.addEventListener('blur', stopOnBlur);
-    return () => window.removeEventListener('blur', stopOnBlur);
-  }, [stop]);
   useEffect(() => () => {
     const capture = captureRef.current;
     releaseCapture(capture);
@@ -625,7 +620,6 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
   const [dialogue, setDialogue] = useState<{ role: 'student' | 'professor'; text: string }[]>([]);
   const [voiceNotice, setVoiceNotice] = useState('');
   const [finishError, setFinishError] = useState('');
-  const spacebarActiveRef = useRef(false);
   const modeLabel = mode === 'dialogue' ? 'Professor dialogue' : mode === 'lecture_questions' ? 'Lecture questions' : 'Final oral exam';
   const readyForAnswer = !submitted && !grade;
   const canRecordAnswer = !dialogueOpen && readyForAnswer && !recorder.finalizing && !speech.speaking && !speech.paused && !speech.speechError && (recorder.recording || !hasCapturedAnswer || (redoUsed && !recorder.transcript));
@@ -679,23 +673,16 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (dialogueOpen || event.code !== 'Space' || event.repeat || !canRecordAnswer) return;
+      if (dialogueOpen || event.code !== 'Space' || event.repeat || (!canRecordAnswer && !recorder.recording && !recorder.starting)) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName))) return;
       event.preventDefault();
-      spacebarActiveRef.current = true;
-      recorder.start();
-    };
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.code === 'Space' && spacebarActiveRef.current) {
-        spacebarActiveRef.current = false;
-        recorder.stop();
-      }
+      if (recorder.recording || recorder.starting) recorder.stop();
+      else void recorder.start();
     };
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
-  }, [recorder.start, recorder.stop, canRecordAnswer, dialogueOpen]);
+    return () => { window.removeEventListener('keydown', onKeyDown); };
+  }, [recorder.start, recorder.stop, recorder.recording, recorder.starting, canRecordAnswer, dialogueOpen]);
 
   useEffect(() => {
     if (mode === 'lecture_questions' && lecture && questions.length) {
@@ -882,15 +869,13 @@ function RecorderPanel({ recorder, canAnswer, canRecord = canAnswer, busy, onTog
   return <div className="rounded-2xl border border-[#e2ded3] bg-[#fbfaf5] px-5 py-6 md:px-7">
     <div className="flex flex-col sm:flex-row sm:items-center gap-5">
       <button type="button" className={`talk-button shrink-0 ${recorder.recording ? 'recording' : ''}`} disabled={!recorder.recording && !recorder.starting && (busy || !canRecord)}
-        onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); onToggle(); }}
-        onPointerUp={() => recorder.stop()} onPointerCancel={() => recorder.stop()} onLostPointerCapture={() => recorder.stop()}
-        onClick={(event) => { if (event.detail === 0) onToggle(); }}
-        onContextMenu={(event) => event.preventDefault()} aria-label={recorder.recording ? 'Recording, release or press LIVE to stop' : recorder.starting ? 'Cancel microphone setup' : 'Hold to speak'} data-testid="button-push-to-talk">
-        {recorder.recording ? <span className="text-xs font-semibold">LIVE</span> : recorder.starting ? <Loader2 size={25} className="animate-spin" /> : <Mic size={27} strokeWidth={1.6} />}
+        onClick={onToggle} aria-pressed={recorder.recording || recorder.starting}
+        aria-label={recorder.recording ? 'Turn microphone off' : recorder.starting ? 'Cancel microphone connection' : 'Turn microphone on'} data-testid="button-push-to-talk">
+        {recorder.recording ? <span className="text-xs font-semibold">ON</span> : recorder.starting ? <Loader2 size={25} className="animate-spin" /> : <Mic size={27} strokeWidth={1.6} />}
       </button>
       <div className="flex-1">
-        <p className={`eyebrow mb-2 ${recorder.recording ? 'status-live text-[#a34b43]' : 'text-[#718078]'}`}><span className="meter-dot" />{recorder.recording ? 'Listening' : 'Push to talk'}</p>
-        <p className="text-sm leading-6 text-[#758078]">{recorder.recording ? 'Release the button, or press LIVE, to finish your response.' : recorder.starting ? 'Connecting your microphone. Release to cancel.' : recorder.finalizing ? 'Finishing your spoken response…' : 'Press and hold the microphone, or hold the spacebar, then release to stop.'}</p>
+        <p className={`eyebrow mb-2 ${recorder.recording ? 'status-live text-[#a34b43]' : 'text-[#718078]'}`}><span className="meter-dot" />{recorder.recording ? 'Microphone on · Listening' : recorder.starting ? 'Connecting microphone' : 'Microphone off'}</p>
+        <p className="text-sm leading-6 text-[#758078]">{recorder.recording ? 'Click again to turn the microphone off and finish your response.' : recorder.starting ? 'Click again to cancel the microphone connection.' : recorder.finalizing ? 'Finishing your spoken response…' : 'Click once to turn the microphone on. Click again to turn it off.'}</p>
         {recorder.transcript && <p className="serif text-base leading-6 text-[#43534d] mt-4" aria-live="polite">“{recorder.transcript}”</p>}
       </div>
       {!recorder.recording && recorder.transcript && !busy && <div className="flex flex-wrap gap-2">
@@ -1091,8 +1076,8 @@ function ProfessorConversationProvider({ children }: { children: ReactNode }) {
     }
   }, [recorder.recording, recorder.finalizing, recorder.transcript, recorder.error]);
   const toggleRecording = () => {
-    if (recorder.recording) {
-      pendingVoice.current = true;
+    if (recorder.recording || recorder.starting) {
+      pendingVoice.current = recorder.recording;
       recorder.stop();
     } else {
       setError('');
@@ -1104,7 +1089,7 @@ function ProfessorConversationProvider({ children }: { children: ReactNode }) {
     }
   };
   const setMode = (mode: 'speak' | 'write') => {
-    if (recorder.recording) {
+    if (recorder.recording || recorder.starting) {
       pendingVoice.current = false;
       if (mode === 'write') setDraft(recorder.transcript);
       recorder.stop();
@@ -1120,7 +1105,7 @@ function ProfessorConversationProvider({ children }: { children: ReactNode }) {
     {children}
     <ProfessorDialoguePanel open={open} messages={messages} inputMode={inputMode} onInputMode={setMode}
       draft={draft} onDraft={setDraft} transcript={recorder.transcript} recording={recorder.recording}
-      finalizing={recorder.finalizing} busy={busy} speaking={replyPlaying} error={error || recorder.error} onToggleRecording={toggleRecording}
+      starting={recorder.starting} finalizing={recorder.finalizing} busy={busy} speaking={replyPlaying} error={error || recorder.error} onToggleRecording={toggleRecording}
       onSend={() => void sendQuestion(inputMode === 'write' ? draft : recorder.transcript)}
       onClose={closeDialogue} contextLabel={contextLabel}
       audioControls={<ProfessorAudioControls speech={speech} />} />

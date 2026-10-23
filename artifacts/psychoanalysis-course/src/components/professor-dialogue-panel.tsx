@@ -12,6 +12,7 @@ export type ProfessorDialoguePanelProps = {
   onDraft: (value: string) => void;
   transcript: string;
   recording: boolean;
+  starting: boolean;
   finalizing: boolean;
   busy: boolean;
   speaking: boolean;
@@ -27,7 +28,7 @@ const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), select:not(
 
 export default function ProfessorDialoguePanel(props: ProfessorDialoguePanelProps) {
   const {
-    open, messages, inputMode, onInputMode, draft, onDraft, transcript, recording, finalizing, busy, speaking,
+    open, messages, inputMode, onInputMode, draft, onDraft, transcript, recording, starting, finalizing, busy, speaking,
     error, onToggleRecording, onSend, onClose, audioControls, contextLabel,
   } = props;
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -110,15 +111,15 @@ export default function ProfessorDialoguePanel(props: ProfessorDialoguePanelProp
         </div>
 
         {inputMode === 'speak' ? <div className="flex items-center gap-4">
-          <button type="button" onClick={onToggleRecording} disabled={!recording && locked} data-testid="button-professor-microphone"
-            aria-label={recording ? 'Stop recording and send' : 'Start recording'}
+          <button type="button" onClick={onToggleRecording} disabled={!recording && !starting && locked} data-testid="button-professor-microphone"
+            aria-pressed={recording || starting} aria-label={recording ? 'Turn microphone off and send' : starting ? 'Cancel microphone connection' : 'Turn microphone on'}
             className={`talk-button !h-[68px] !w-[68px] shrink-0 ${recording ? 'recording' : ''}`}>
-            {finalizing ? <Loader2 size={24} className="animate-spin" aria-hidden="true" /> : recording ? <Square size={22} aria-hidden="true" /> : <Mic size={24} aria-hidden="true" />}
+            {finalizing || starting ? <Loader2 size={24} className="animate-spin" aria-hidden="true" /> : recording ? <Square size={22} aria-hidden="true" /> : <Mic size={24} aria-hidden="true" />}
           </button>
           <div className="min-w-0 flex-1">
             <p className={`text-sm font-semibold ${recording ? 'status-live' : ''}`}>
               {recording && <span className="meter-dot" aria-hidden="true" />}
-              {recording ? 'Listening. Press stop to send.' : finalizing ? 'Finishing your transcript' : speaking ? 'The professor is speaking' : busy ? 'Waiting for the professor' : 'Press the microphone and ask your question'}
+              {recording ? 'Microphone on. Click again to turn it off and send.' : starting ? 'Connecting microphone. Click again to cancel.' : finalizing ? 'Finishing your transcript' : speaking ? 'The professor is speaking' : busy ? 'Waiting for the professor' : 'Microphone off. Click once to turn it on.'}
             </p>
             <p className="serif mt-1 min-h-[1.5em] text-[16px] italic leading-snug text-[#58756b]" aria-live="polite" data-testid="text-live-transcript">
               {transcript || (recording ? 'Your words will appear here.' : 'Stopping the microphone sends your question automatically.')}

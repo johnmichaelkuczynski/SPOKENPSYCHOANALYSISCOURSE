@@ -10,3 +10,9 @@ Use the user's own ElevenLabs API key through secure server-side configuration, 
 **Why:** Dr. Kuczynski repeatedly clarified that the professor speaks aloud and explicitly corrected the use of a connector instead of their ElevenLabs key.
 
 **How to apply:** Preserve required speech for lectures, questions, dialogue replies, follow-up probes, and grading feedback. Never expose credentials in client code, chat, logs, or memory.
+
+Microphones must be on/off toggles: click once to start and click again to stop. Never require pressing and holding the microphone or spacebar.
+
+**Why:** The user explicitly rejected hold-to-record: “IT SHOULD ON OR OFF. PERIOD.”
+
+**How to apply:** Use the same toggle behavior throughout assessments and professor dialogue. Releasing a pointer or key must not stop recording.
