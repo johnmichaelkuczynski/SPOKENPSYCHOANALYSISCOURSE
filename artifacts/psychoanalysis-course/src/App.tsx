@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Headphones, LockKeyhole, Mic, RotateCcw, Volume2 } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Headphones, Loader2, LockKeyhole, Mic, RotateCcw, Volume2 } from 'lucide-react';
 import { Link, Redirect, Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import {
   useAskProfessor, useCreateSession, useGetActivity, useGetCourse, useGetProgress,
@@ -412,6 +412,8 @@ function useOralRecorder() {
   getTokenRef.current = getToken;
   const captureRef = useRef<any>(null);
   const finalTextRef = useRef('');
+  const startingRef = useRef(false);
+  const [starting, setStarting] = useState(false);
   const [recording, setRecording] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -428,10 +430,15 @@ function useOralRecorder() {
     try { void capture.context?.close(); } catch { /* Context already closed. */ }
   }, []);
   const start = useCallback(async () => {
+    if (startingRef.current || captureRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
     setError('');
     setFinalizing(false);
     stopRequestedRef.current = false;
     if (!canRecognize) {
+      startingRef.current = false;
+      setStarting(false);
       setError('A microphone and live speech transcription are required. This browser cannot provide voice-only answers.');
       return;
     }
@@ -439,6 +446,11 @@ function useOralRecorder() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const capture: any = { stream, turns: new Map<number, string>() };
       captureRef.current = capture;
+      if (stopRequestedRef.current) {
+        releaseCapture(capture);
+        captureRef.current = null;
+        return;
+      }
       const temporary = await getTokenRef.current();
       if (stopRequestedRef.current) {
         releaseCapture(capture);
@@ -450,6 +462,11 @@ function useOralRecorder() {
       const context = new AudioContextConstructor({ sampleRate: 16000 });
       capture.context = context;
       await context.resume();
+      if (stopRequestedRef.current) {
+        releaseCapture(capture);
+        captureRef.current = null;
+        return;
+      }
       const socket = new WebSocket(`wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&token=${encodeURIComponent(temporary.token)}`);
       capture.socket = socket;
       setTranscript('');
@@ -458,6 +475,7 @@ function useOralRecorder() {
       await new Promise<void>((resolve, reject) => {
         socket.onopen = () => resolve();
         socket.onerror = () => reject(new Error('Live transcription connection failed.'));
+        socket.onclose = () => reject(new Error('Live transcription connection ended during setup.'));
       });
       socket.onmessage = (message) => {
         try {
@@ -529,12 +547,18 @@ function useOralRecorder() {
       releaseCapture(capture);
       try { capture?.socket?.close(); } catch { /* Connection already closed. */ }
       captureRef.current = null;
-      setError('Microphone access or live transcription is unavailable. Allow microphone access and try again.');
+      if (!stopRequestedRef.current) setError('Microphone access or live transcription is unavailable. Allow microphone access and try again.');
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
     }
   }, [canRecognize, releaseCapture]);
   const stop = useCallback(() => {
+    // Cancellation applies during every asynchronous setup step, not just before getUserMedia.
+    stopRequestedRef.current = true;
+    setRecording(false);
     const capture = captureRef.current;
-    if (!capture) { stopRequestedRef.current = true; return; }
+    if (!capture) return;
     releaseCapture(capture);
     try {
       if (capture.socket?.readyState === WebSocket.OPEN) {
@@ -552,12 +576,17 @@ function useOralRecorder() {
     captureRef.current = null;
     setRecording(false);
   }, [releaseCapture]);
+  useEffect(() => {
+    const stopOnBlur = () => stop();
+    window.addEventListener('blur', stopOnBlur);
+    return () => window.removeEventListener('blur', stopOnBlur);
+  }, [stop]);
   useEffect(() => () => {
     const capture = captureRef.current;
     releaseCapture(capture);
     try { capture?.socket?.close(); } catch { /* Socket already ended. */ }
   }, [releaseCapture]);
-  return { start, stop, recording, finalizing, transcript, setTranscript, error, setError, supported: canRecognize };
+  return { start, stop, starting, recording, finalizing, transcript, setTranscript, error, setError, supported: canRecognize };
 }
 
 function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
@@ -796,7 +825,7 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
   };
 
   const beginAnswer = () => {
-    if (recorder.recording) recorder.stop();
+    if (recorder.recording || recorder.starting) recorder.stop();
     else if (!canRecordAnswer) return;
     else {
       setVoiceNotice('');
@@ -856,12 +885,16 @@ function RecorderPanel({ recorder, canAnswer, canRecord = canAnswer, busy, onTog
 }) {
   return <div className="rounded-2xl border border-[#e2ded3] bg-[#fbfaf5] px-5 py-6 md:px-7">
     <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-      <button type="button" className={`talk-button shrink-0 ${recorder.recording ? 'recording' : ''}`} disabled={busy || !canRecord} onPointerDown={(event) => { event.preventDefault(); if (!recorder.recording) onToggle(); }} onPointerUp={() => recorder.stop()} onPointerLeave={() => recorder.stop()} onContextMenu={(event) => event.preventDefault()} aria-label={recorder.recording ? 'Recording, release to stop' : 'Hold to speak'} data-testid="button-push-to-talk">
-        {recorder.recording ? <span className="text-xs font-semibold">LIVE</span> : <Mic size={27} strokeWidth={1.6} />}
+      <button type="button" className={`talk-button shrink-0 ${recorder.recording ? 'recording' : ''}`} disabled={!recorder.recording && !recorder.starting && (busy || !canRecord)}
+        onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); onToggle(); }}
+        onPointerUp={() => recorder.stop()} onPointerCancel={() => recorder.stop()} onLostPointerCapture={() => recorder.stop()}
+        onClick={(event) => { if (event.detail === 0) onToggle(); }}
+        onContextMenu={(event) => event.preventDefault()} aria-label={recorder.recording ? 'Recording, release or press LIVE to stop' : recorder.starting ? 'Cancel microphone setup' : 'Hold to speak'} data-testid="button-push-to-talk">
+        {recorder.recording ? <span className="text-xs font-semibold">LIVE</span> : recorder.starting ? <Loader2 size={25} className="animate-spin" /> : <Mic size={27} strokeWidth={1.6} />}
       </button>
       <div className="flex-1">
         <p className={`eyebrow mb-2 ${recorder.recording ? 'status-live text-[#a34b43]' : 'text-[#718078]'}`}><span className="meter-dot" />{recorder.recording ? 'Listening' : 'Push to talk'}</p>
-        <p className="text-sm leading-6 text-[#758078]">{recorder.recording ? 'Release the button to finish your response.' : recorder.finalizing ? 'Finishing your spoken response…' : 'Press and hold the microphone, or hold the spacebar, then release to stop.'}</p>
+        <p className="text-sm leading-6 text-[#758078]">{recorder.recording ? 'Release the button, or press LIVE, to finish your response.' : recorder.starting ? 'Connecting your microphone. Release to cancel.' : recorder.finalizing ? 'Finishing your spoken response…' : 'Press and hold the microphone, or hold the spacebar, then release to stop.'}</p>
         {recorder.transcript && <p className="serif text-base leading-6 text-[#43534d] mt-4" aria-live="polite">“{recorder.transcript}”</p>}
       </div>
       {!recorder.recording && recorder.transcript && !busy && <div className="flex flex-wrap gap-2">
