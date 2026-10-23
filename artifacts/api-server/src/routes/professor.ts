@@ -17,7 +17,6 @@ import { getInternalCourse } from "../lib/courseContent";
 import { getStudentId, requireStudent } from "../middlewares/requireStudent";
 
 const router: IRouter = Router();
-const course = getInternalCourse();
 let openingPreviewAudio: Buffer | undefined;
 const guestUse = new Map<string, number>();
 const guestPending = new Set<string>();
@@ -95,7 +94,7 @@ router.post("/professor/dialogue", async (req, res): Promise<void> => {
         role: "system",
         content:
           "You are a professor teaching Basic Tenets of Psychoanalysis. Answer the student's questions clearly and concisely in spoken style (short paragraphs, no lists or markdown). Ground answers in the course content provided below. You may go beyond it to clarify, but never contradict it. Engage objections seriously. Keep answers under about 150 words unless the student asks for more.\n\n" +
-          course.teachingContent,
+          getInternalCourse().teachingContent,
       },
       ...history,
       { role: "user", content: parsed.data.question },
@@ -119,7 +118,7 @@ router.post("/professor/grade-lecture", requireStudent, async (req, res): Promis
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const question = course.lectures[parsed.data.lectureId - 1]?.questions[parsed.data.questionIndex];
+  const question = getInternalCourse().lectures[parsed.data.lectureId - 1]?.questions[parsed.data.questionIndex];
   if (!question) {
     res.status(404).json({ error: "Lecture question not found." });
     return;
@@ -170,7 +169,7 @@ router.post("/professor/grade-exam", requireStudent, async (req, res): Promise<v
     res.status(403).json({ error: "This exam question is not part of the active session." });
     return;
   }
-  const originalQuestion = course.finalExam.questions[questionIndex];
+  const originalQuestion = getInternalCourse().finalExam.questions[questionIndex];
   const [retakeQuestion] = session.attempt > 1
     ? await db
         .select()
@@ -282,7 +281,7 @@ router.post("/voice/speech", async (req, res): Promise<void> => {
     res.status(413).json({ error: "This spoken passage is too long." });
     return;
   }
-  const opening = course.lectures[0]?.sections[0];
+  const opening = getInternalCourse().lectures[0]?.sections[0];
   const isOpeningPreview = Boolean(opening && parsed.data.text.trim() === `${opening.heading}. ${opening.text}`);
   const limitedGuest = !authUserId && !isOpeningPreview;
   if (isOpeningPreview && openingPreviewAudio) {

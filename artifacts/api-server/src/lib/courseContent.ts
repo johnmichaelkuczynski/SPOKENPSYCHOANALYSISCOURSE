@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { logger } from "./logger";
 
 export interface InternalQuestion {
   question: string;
@@ -29,6 +30,13 @@ export interface InternalCourse {
 }
 
 let cached: InternalCourse | undefined;
+
+export class CourseUnavailableError extends Error {
+  constructor() {
+    super("The course content is currently unavailable.");
+    this.name = "CourseUnavailableError";
+  }
+}
 
 function requiredMatch(match: RegExpMatchArray | null, label: string): RegExpMatchArray {
   if (!match) throw new Error(`The canonical course source is missing ${label}.`);
@@ -134,10 +142,16 @@ function parseCourse(source: string): InternalCourse {
 
 export function getInternalCourse(): InternalCourse {
   if (cached) return cached;
-  const sourcePath = resolve(process.cwd(), "src/data/course-source.txt");
-  const source = readFileSync(sourcePath, "utf8");
-  cached = parseCourse(source);
-  return cached;
+  // Source modules live in src/lib; the production bundle lives in dist.
+  // The build replaces this URL with ./data/course-source.txt for that bundle.
+  const sourcePath = fileURLToPath(new URL("../data/course-source.txt", import.meta.url));
+  try {
+    cached = parseCourse(readFileSync(sourcePath, "utf8"));
+    return cached;
+  } catch (err) {
+    logger.error({ err, sourcePath }, "Unable to load canonical course content");
+    throw new CourseUnavailableError();
+  }
 }
 
 export function getPublicCourse() {

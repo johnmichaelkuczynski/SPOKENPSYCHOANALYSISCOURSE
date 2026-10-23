@@ -29,7 +29,6 @@ import { getPublicCourse, getInternalCourse } from "../lib/courseContent";
 import { getStudentId, requireStudent } from "../middlewares/requireStudent";
 
 const router: IRouter = Router();
-const course = getInternalCourse();
 
 async function generateRetakePrompts(): Promise<string[]> {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -53,8 +52,8 @@ async function generateRetakePrompts(): Promise<string[]> {
         {
           role: "user",
           content: JSON.stringify({
-            courseContent: course.teachingContent,
-            originalCases: course.finalExam.questions.map((question) => ({
+            courseContent: getInternalCourse().teachingContent,
+            originalCases: getInternalCourse().finalExam.questions.map((question) => ({
               prompt: question.prompt,
               criteria: question.criteria,
             })),
@@ -75,12 +74,12 @@ async function generateRetakePrompts(): Promise<string[]> {
   );
   if (
     !prompts ||
-    prompts.length !== course.finalExam.questions.length ||
+    prompts.length !== getInternalCourse().finalExam.questions.length ||
     prompts.some((prompt) => !prompt)
   ) {
     throw new Error("Retake cases were incomplete.");
   }
-  const originals = new Set(course.finalExam.questions.map((question) => question.prompt.trim().toLowerCase()));
+  const originals = new Set(getInternalCourse().finalExam.questions.map((question) => question.prompt.trim().toLowerCase()));
   if (prompts.some((prompt) => originals.has(prompt.toLowerCase()))) {
     throw new Error("Retake cases duplicated an original case.");
   }
@@ -96,7 +95,7 @@ async function ensureStudent(studentId: string): Promise<void> {
       set: { lastSeenAt: new Date() },
     });
 
-  for (const lecture of course.lectures) {
+  for (const lecture of getInternalCourse().lectures) {
     await db
       .insert(lectureProgressTable)
       .values({
@@ -137,8 +136,8 @@ router.get("/progress", async (_req, res): Promise<void> => {
   }
 
   const lectureTotals = new Map<number, number>();
-  for (const lecture of course.lectures) {
-    const questions = course.lectures[lecture.id - 1]?.questions ?? [];
+  for (const lecture of getInternalCourse().lectures) {
+    const questions = getInternalCourse().lectures[lecture.id - 1]?.questions ?? [];
     const total = questions.reduce(
       (sum, _question, index) =>
         sum + (latestScores.get(`lecture:${lecture.id}:${index}`)?.score ?? 0),
@@ -150,7 +149,7 @@ router.get("/progress", async (_req, res): Promise<void> => {
     lectureTotals.set(lecture.id, answeredCount === questions.length ? total : 0);
   }
   const lectureTotal = [...lectureTotals.values()].reduce((sum, value) => sum + value, 0);
-  const lectureProgress = course.lectures.map((lecture) => {
+  const lectureProgress = getInternalCourse().lectures.map((lecture) => {
     const row = progressRows.find((item) => item.lectureId === lecture.id);
     const total = lectureTotals.get(lecture.id) ?? 0;
     const unlocked = lecture.id === 1 || (lectureTotals.get(lecture.id - 1) ?? 0) >= 8;
@@ -383,7 +382,7 @@ router.post("/sessions", async (req, res): Promise<void> => {
         ));
       const questionTotals = new Map<number, number>();
       for (const score of previousScores) questionTotals.set(score.questionIndex, score.score);
-      if (questionTotals.size !== course.lectures[lectureId - 1].questions.length) {
+      if (questionTotals.size !== getInternalCourse().lectures[lectureId - 1].questions.length) {
         res.status(403).json({ error: "Complete the current lecture test before starting another attempt." });
         return;
       }
@@ -404,7 +403,7 @@ router.post("/sessions", async (req, res): Promise<void> => {
       .select()
       .from(lectureProgressTable)
       .where(eq(lectureProgressTable.clerkUserId, studentId));
-    const allPassed = course.lectures.every((lecture) => {
+    const allPassed = getInternalCourse().lectures.every((lecture) => {
       const row = progressRows.find((item) => item.lectureId === lecture.id);
       return row?.status === "passed";
     });
@@ -443,7 +442,7 @@ router.post("/sessions", async (req, res): Promise<void> => {
   }
 
   let examPrompts = mode === "final_exam"
-    ? course.finalExam.questions.map((question) => question.prompt)
+    ? getInternalCourse().finalExam.questions.map((question) => question.prompt)
     : undefined;
   if (mode === "final_exam" && attempt > 1) {
     try {
@@ -471,7 +470,7 @@ router.post("/sessions", async (req, res): Promise<void> => {
           sessionId: created.id,
           questionIndex,
           prompt,
-          criteria: course.finalExam.questions[questionIndex].criteria,
+          criteria: getInternalCourse().finalExam.questions[questionIndex].criteria,
         })),
       );
     }
@@ -612,10 +611,10 @@ router.post("/scores", async (req, res): Promise<void> => {
     );
     const complete =
       body.data.attempt === 1
-        ? attemptScores.length >= course.lectures[body.data.lectureId - 1].questions.length
+        ? attemptScores.length >= getInternalCourse().lectures[body.data.lectureId - 1].questions.length
         : body.data.attempt === 2
-          ? originalScores.length >= course.lectures[body.data.lectureId - 1].questions.length && retryCompleted
-          : attemptScores.length >= course.lectures[body.data.lectureId - 1].questions.length;
+          ? originalScores.length >= getInternalCourse().lectures[body.data.lectureId - 1].questions.length && retryCompleted
+          : attemptScores.length >= getInternalCourse().lectures[body.data.lectureId - 1].questions.length;
     await db
       .update(lectureProgressTable)
       .set({

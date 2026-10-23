@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -103,6 +103,22 @@ async function buildAll() {
     ],
     sourcemap: "linked",
     plugins: [
+      {
+        name: "course-data-url",
+        setup(build) {
+          build.onLoad({ filter: /[/\\]lib[/\\]courseContent\.ts$/ }, async (args) => {
+            const { readFile } = await import("node:fs/promises");
+            const source = await readFile(args.path, "utf8");
+            return {
+              contents: source.replace(
+                'new URL("../data/course-source.txt", import.meta.url)',
+                'new URL("./data/course-source.txt", import.meta.url)',
+              ),
+              loader: "ts",
+            };
+          });
+        },
+      },
       // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
       esbuildPluginPino({ transports: ["pino-pretty"] })
     ],
@@ -117,6 +133,9 @@ globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
 globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
+  });
+  await cp(path.resolve(artifactDir, "src/data"), path.resolve(distDir, "data"), {
+    recursive: true,
   });
 }
 
