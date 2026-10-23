@@ -1,0 +1,139 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap');
+@layer theme, base, clerk, components, utilities;
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-border: hsl(var(--card-border));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --font-sans: var(--app-font-sans);
+  --font-serif: var(--app-font-serif);
+  --font-mono: var(--app-font-mono);
+  --radius-lg: var(--radius);
+}
+
+:root {
+  --background: 42 32% 96%;
+  --foreground: 190 20% 17%;
+  --border: 38 18% 84%;
+  --input: 38 18% 84%;
+  --ring: 167 26% 34%;
+  --card: 42 32% 98%;
+  --card-foreground: 190 20% 17%;
+  --card-border: 38 18% 84%;
+  --popover: 42 32% 98%;
+  --popover-foreground: 190 20% 17%;
+  --primary: 167 26% 34%;
+  --primary-foreground: 42 32% 98%;
+  --secondary: 40 24% 90%;
+  --secondary-foreground: 190 20% 17%;
+  --muted: 40 22% 92%;
+  --muted-foreground: 190 10% 45%;
+  --accent: 35 45% 88%;
+  --accent-foreground: 190 20% 17%;
+  --destructive: 2 48% 45%;
+  --destructive-foreground: 42 32% 98%;
+  --app-font-sans: 'DM Sans', sans-serif;
+  --app-font-serif: 'Source Serif 4', Georgia, serif;
+  --app-font-mono: ui-monospace, monospace;
+  --radius: 0.75rem;
+  --button-outline: rgba(35, 53, 52, .12);
+  --badge-outline: rgba(35, 53, 52, .08);
+  --elevate-1: rgba(35, 53, 52, .035);
+  --elevate-2: rgba(35, 53, 52, .08);
+}
+
+.dark {
+  --background: 190 18% 12%;
+  --foreground: 42 26% 91%;
+  --border: 190 12% 27%;
+  --input: 190 12% 27%;
+  --ring: 167 30% 57%;
+  --card: 190 16% 15%;
+  --card-foreground: 42 26% 91%;
+  --card-border: 190 12% 27%;
+  --popover: 190 16% 15%;
+  --popover-foreground: 42 26% 91%;
+  --primary: 167 30% 57%;
+  --primary-foreground: 190 20% 12%;
+  --secondary: 190 13% 23%;
+  --secondary-foreground: 42 26% 91%;
+  --muted: 190 13% 22%;
+  --muted-foreground: 42 12% 68%;
+  --accent: 35 24% 27%;
+  --accent-foreground: 42 26% 91%;
+  --destructive: 2 48% 55%;
+  --destructive-foreground: 42 26% 91%;
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { scroll-behavior: smooth; }
+  body { @apply font-sans antialiased bg-background text-foreground; margin: 0; }
+  button, a { -webkit-tap-highlight-color: transparent; }
+}
+
+:root { font-synthesis: none; text-rendering: optimizeLegibility; }
+.serif { font-family: var(--app-font-serif); }
+.eyebrow { letter-spacing: .14em; text-transform: uppercase; font-size: .68rem; font-weight: 700; }
+.page-shell { min-height: 100dvh; background: #f7f5ee; }
+.topbar { height: 72px; border-bottom: 1px solid #e5e0d5; display:flex; align-items:center; justify-content:space-between; padding:0 clamp(20px,5vw,72px); background:rgba(250,248,242,.94); }
+.brand-mark { display:flex; align-items:center; gap:12px; color:#213e3a; text-decoration:none; }
+.brand-symbol { width:34px;height:34px;border:1px solid #608176;border-radius:50%;display:grid;place-items:center;color:#416a5f;font-family:var(--app-font-serif);font-size:20px; }
+.brand-name { font-family:var(--app-font-serif);font-size:17px;line-height:1.1; }
+.brand-caption { color:#77817b;font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin-top:4px; }
+.main-wrap { width:min(100% - 40px, 860px); margin:0 auto; }
+.quiet-link { color:#496c61;text-decoration:none;font-size:14px;font-weight:600; }
+.quiet-link:hover { color:#203f39; text-decoration:underline; text-underline-offset:4px; }
+.primary-action { display:inline-flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:999px;background:#315e53;color:#fffaf1;padding:13px 22px;font:600 14px var(--app-font-sans);text-decoration:none;cursor:pointer;transition:transform .18s ease,opacity .18s ease; }
+.primary-action:hover { transform:translateY(-1px); }
+.primary-action:disabled { opacity:.48;cursor:not-allowed;transform:none; }
+.secondary-action { display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #c9d3cc;border-radius:999px;background:transparent;color:#315e53;padding:12px 19px;font:600 14px var(--app-font-sans);cursor:pointer; }
+.content-column { width:min(100% - 40px, 760px);margin:0 auto; }
+.lecture-copy { font-family:var(--app-font-serif);font-size:clamp(18px,2.1vw,21px);line-height:1.82;color:#31413f; }
+.lecture-copy p { margin:0 0 1.45em; }
+.section-rule { border:0;border-top:1px solid #ded9ce;margin:38px 0; }
+.loading-line { height:14px;border-radius:99px;background:linear-gradient(90deg,#e9e6dc,#f4f2eb,#e9e6dc);background-size:200% 100%;animation:shimmer 1.6s ease-in-out infinite; }
+@keyframes shimmer { to { background-position:-200% 0; } }
+.fade-in { animation:fade-in .45s ease both; }
+@keyframes fade-in { from { opacity:0;transform:translateY(8px) } to { opacity:1;transform:translateY(0) } }
+.talk-button { width:92px;height:92px;border-radius:50%;border:1px solid #729187;background:#315e53;color:#fffaf1;display:grid;place-items:center;cursor:pointer;box-shadow:0 0 0 10px #315e5310;transition:transform .18s ease,background .2s ease; }
+.talk-button:hover { transform:scale(1.035);background:#244c43; }
+.talk-button.recording { background:#a94d45;box-shadow:0 0 0 10px #a94d4515; }
+.talk-button:disabled { opacity:.45;cursor:not-allowed; }
+.meter-dot { display:inline-block;width:6px;height:6px;border-radius:50%;background:#729187;margin-right:7px; }
+.status-live .meter-dot { background:#ad554d;animation:pulse 1s infinite alternate; }
+@keyframes pulse { to { opacity:.35;transform:scale(.75) } }
+.mode-chip { display:inline-flex;align-items:center;gap:8px;color:#42675d;border:1px solid #cbd8cf;border-radius:999px;padding:7px 11px;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase; }
+.score-mark { font-family:var(--app-font-serif);font-size:31px;color:#315e53; }
+.divider-label { display:flex;align-items:center;gap:12px;color:#8a9188;font-size:11px;letter-spacing:.14em;text-transform:uppercase; }
+.divider-label:before,.divider-label:after { content:"";height:1px;background:#ded9ce;flex:1; }
+.cert-paper { border:1px solid #c7b997;background:#faf8f0;padding:44px 32px;text-align:center;position:relative; }
+.cert-paper:before { content:"";position:absolute;inset:8px;border:1px solid #ddd3bb;pointer-events:none; }
+@media(max-width:640px) {
+  .topbar { height:64px;padding:0 18px; }
+  .main-wrap,.content-column { width:min(100% - 36px, 760px); }
+  .lecture-copy {font-size:18px;line-height:1.75}
+  .talk-button {width:82px;height:82px}
+}

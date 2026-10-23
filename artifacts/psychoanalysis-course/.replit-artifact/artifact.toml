@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Basic Tenets Oral Course"
+description = "An oral psychoanalysis course taught by an AI professor, with verbatim lecture delivery, spoken question sessions, secure student progress, and a final oral exam."
+version = "1.0.0"
+id = "artifacts/psychoanalysis-course"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21714
+
+[services.development]
+run = "pnpm --filter @workspace/psychoanalysis-course run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/psychoanalysis-course", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/psychoanalysis-course/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21714"
+BASE_PATH = "/"

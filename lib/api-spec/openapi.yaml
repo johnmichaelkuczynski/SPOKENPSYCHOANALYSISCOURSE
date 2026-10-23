@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Oral course API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: course
+    description: Course and student learning records
+  - name: professor
+    description: AI professor and voice services
 paths:
   /healthz:
     get:
@@ -24,13 +28,459 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /course:
+    get:
+      operationId: getCourse
+      tags: [course]
+      summary: Get the canonical course source
+      responses:
+        "200":
+          description: Course content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Course"
+  /progress:
+    get:
+      operationId: getProgress
+      tags: [course]
+      summary: Get the signed-in student's progress and results
+      responses:
+        "200":
+          description: Student progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Progress"
+  /activity:
+    get:
+      operationId: getActivity
+      tags: [course]
+      summary: Get recent oral course activity
+      responses:
+        "200":
+          description: Recent learning activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityFeed"
+  /progress/lectures/{lectureId}:
+    put:
+      operationId: updateLectureProgress
+      tags: [course]
+      summary: Update lecture availability and completion
+      parameters:
+        - in: path
+          name: lectureId
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 5 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LectureProgressInput"
+      responses:
+        "200":
+          description: Updated lecture progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LectureProgress"
+  /sessions:
+    get:
+      operationId: getSessions
+      tags: [course]
+      summary: List the student's oral sessions
+      responses:
+        "200":
+          description: Oral sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OralSession" }
+    post:
+      operationId: createSession
+      tags: [course]
+      summary: Start an oral session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionInput"
+      responses:
+        "201":
+          description: New oral session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OralSession"
+  /sessions/{sessionId}/transcripts:
+    post:
+      operationId: saveTranscript
+      tags: [course]
+      summary: Save a dialogue, lecture, or exam transcript
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranscriptInput"
+      responses:
+        "201":
+          description: Saved transcript
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transcript"
+  /sessions/{sessionId}/end:
+    post:
+      operationId: endSession
+      tags: [course]
+      summary: Record the end time of an oral session
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Updated oral session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OralSession"
+  /scores:
+    post:
+      operationId: saveScore
+      tags: [course]
+      summary: Save a lecture or final exam score and feedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoreInput"
+      responses:
+        "201":
+          description: Saved score
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Score"
+  /professor/dialogue:
+    post:
+      operationId: askProfessor
+      tags: [professor]
+      summary: Ask the AI professor a course-grounded question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DialogueInput"
+      responses:
+        "200":
+          description: Professor response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DialogueReply"
+  /professor/grade-lecture:
+    post:
+      operationId: gradeLectureAnswer
+      tags: [professor]
+      summary: Grade a lecture oral answer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LectureGradeInput"
+      responses:
+        "200":
+          description: Lecture answer grade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LectureGrade"
+  /professor/grade-exam:
+    post:
+      operationId: gradeExamAnswer
+      tags: [professor]
+      summary: Assess a final exam answer and decide whether to probe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExamGradeInput"
+      responses:
+        "200":
+          description: Exam assessment and grade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExamGrade"
+  /voice/transcription-token:
+    post:
+      operationId: getTranscriptionToken
+      tags: [professor]
+      summary: Issue a temporary AssemblyAI real-time transcription token
+      responses:
+        "200":
+          description: Short-lived client token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemporaryToken"
+  /voice/speech:
+    post:
+      operationId: speakText
+      tags: [professor]
+      summary: Stream professor speech audio for the provided text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpeechInput"
+      responses:
+        "200":
+          description: Generated speech audio
+          content:
+            audio/mpeg:
+              schema: { type: string, format: binary }
 components:
   schemas:
     HealthStatus:
       type: object
       properties:
-        status:
-          type: string
-      required:
-        - status
-
+        status: { type: string }
+      required: [status]
+    Course:
+      type: object
+      properties:
+        title: { type: string }
+        subtitle: { type: string }
+        lectures:
+          type: array
+          items: { $ref: "#/components/schemas/Lecture" }
+        finalExam:
+          type: object
+          properties:
+            questions:
+              type: array
+              items: { $ref: "#/components/schemas/ExamQuestion" }
+            rubric: { type: string }
+        gradingRules: { type: string }
+      required: [title, subtitle, lectures, finalExam, gradingRules]
+    Lecture:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        topics:
+          type: array
+          items: { type: string }
+        sections:
+          type: array
+          items: { $ref: "#/components/schemas/LectureSection" }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/LectureQuestion" }
+      required: [id, title, topics, sections, questions]
+    LectureSection:
+      type: object
+      properties:
+        heading: { type: string }
+        text: { type: string }
+      required: [heading, text]
+    LectureQuestion:
+      type: object
+      properties:
+        question: { type: string }
+      required: [question]
+    ExamQuestion:
+      type: object
+      properties:
+        prompt: { type: string }
+      required: [prompt]
+    LectureProgress:
+      type: object
+      properties:
+        lectureId: { type: integer }
+        status: { type: string, enum: [locked, available, passed] }
+        currentSection: { type: integer }
+        bestScore: { type: ["integer", "null"] }
+        attempts: { type: integer }
+        nextRetakeAt: { type: ["string", "null"], format: date-time }
+      required: [lectureId, status, currentSection, bestScore, attempts, nextRetakeAt]
+    Progress:
+      type: object
+      properties:
+        displayName: { type: string }
+        lectures:
+          type: array
+          items: { $ref: "#/components/schemas/LectureProgress" }
+        examUnlocked: { type: boolean }
+        examRetakeAt: { type: ["string", "null"], format: date-time }
+        lectureTotal: { type: integer }
+        examTotal: { type: integer }
+        gradePercent: { type: ["number", "null"] }
+        result: { type: ["string", "null"], enum: [pass, distinction, fail, null] }
+        certificateDate: { type: ["string", "null"], format: date }
+      required: [displayName, lectures, examUnlocked, examRetakeAt, lectureTotal, examTotal, gradePercent, result, certificateDate]
+    ActivityFeed:
+      type: object
+      properties:
+        completedLectures: { type: integer }
+        totalLectures: { type: integer }
+        transcriptCount: { type: integer }
+        recent:
+          type: array
+          items: { $ref: "#/components/schemas/ActivityItem" }
+      required: [completedLectures, totalLectures, transcriptCount, recent]
+    ActivityItem:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [lecture, dialogue, test, exam] }
+        label: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, kind, label, createdAt]
+    LectureProgressInput:
+      type: object
+      properties:
+        status: { type: string, enum: [available, passed] }
+        currentSection: { type: integer, minimum: 0 }
+      required: [status, currentSection]
+    OralSession:
+      type: object
+      properties:
+        id: { type: string }
+        mode: { type: string, enum: [dialogue, lecture_questions, final_exam] }
+        lectureId: { type: ["integer", "null"] }
+        attempt: { type: integer }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: ["string", "null"], format: date-time }
+        examQuestions:
+          type: array
+          items:
+            type: object
+            properties:
+              prompt: { type: string }
+            required: [prompt]
+      required: [id, mode, lectureId, attempt, startedAt, endedAt]
+    SessionInput:
+      type: object
+      properties:
+        mode: { type: string, enum: [dialogue, lecture_questions, final_exam] }
+        lectureId: { type: ["integer", "null"] }
+        attempt: { type: integer, minimum: 1 }
+      required: [mode, attempt]
+    Transcript:
+      type: object
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [student, professor] }
+        text: { type: string }
+        context: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, role, text, context, createdAt]
+    TranscriptInput:
+      type: object
+      properties:
+        role: { type: string, enum: [student, professor] }
+        text: { type: string, minLength: 1 }
+        context: { type: string }
+      required: [role, text]
+    Score:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [lecture, exam] }
+        lectureId: { type: ["integer", "null"] }
+        questionIndex: { type: integer }
+        score: { type: integer, minimum: 0, maximum: 4 }
+        feedback: { type: string }
+        attempt: { type: integer }
+        createdAt: { type: string, format: date-time }
+      required: [id, kind, lectureId, questionIndex, score, feedback, attempt, createdAt]
+    ScoreInput:
+      type: object
+      properties:
+        kind: { type: string, enum: [lecture, exam] }
+        lectureId: { type: ["integer", "null"] }
+        questionIndex: { type: integer, minimum: 0 }
+        score: { type: integer, minimum: 0, maximum: 4 }
+        feedback: { type: string }
+        attempt: { type: integer, minimum: 1 }
+        studentAnswer: { type: string }
+      required: [kind, questionIndex, score, feedback, attempt, studentAnswer]
+    DialogueInput:
+      type: object
+      properties:
+        question: { type: string, minLength: 1 }
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              role: { type: string, enum: [user, assistant] }
+              content: { type: string }
+            required: [role, content]
+      required: [question, history]
+    DialogueReply:
+      type: object
+      properties:
+        answer: { type: string }
+      required: [answer]
+    LectureGradeInput:
+      type: object
+      properties:
+        lectureId: { type: integer, minimum: 1, maximum: 5 }
+        questionIndex: { type: integer, minimum: 0, maximum: 5 }
+        studentAnswer: { type: string }
+      required: [lectureId, questionIndex, studentAnswer]
+    LectureGrade:
+      type: object
+      properties:
+        score: { type: integer, minimum: 0, maximum: 2 }
+        feedback: { type: string }
+      required: [score, feedback]
+    ExamGradeInput:
+      type: object
+      properties:
+        sessionId: { type: string, format: uuid }
+        questionIndex: { type: integer, minimum: 0, maximum: 4 }
+        studentAnswer: { type: string }
+        followUpAnswer: { type: string }
+        retake: { type: boolean }
+      required: [sessionId, questionIndex, studentAnswer, retake]
+    ExamGrade:
+      type: object
+      properties:
+        needsFollowUp: { type: boolean }
+        followUp: { type: ["string", "null"] }
+        score: { type: ["integer", "null"], minimum: 0, maximum: 4 }
+        feedback: { type: ["string", "null"] }
+      required: [needsFollowUp, followUp, score, feedback]
+    TemporaryToken:
+      type: object
+      properties:
+        token: { type: string }
+        expiresAt: { type: string, format: date-time }
+      required: [token, expiresAt]
+    SpeechInput:
+      type: object
+      properties:
+        text: { type: string, minLength: 1 }
+      required: [text]
