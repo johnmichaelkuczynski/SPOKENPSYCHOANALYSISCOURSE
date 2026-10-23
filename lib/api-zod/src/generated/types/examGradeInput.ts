@@ -7,6 +7,7 @@
  */
 
 export interface ExamGradeInput {
+  sessionId: string;
   /**
      * @minimum 0
      * @maximum 4

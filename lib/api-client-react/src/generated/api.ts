@@ -721,6 +721,80 @@ export const useSaveTranscript = <TError = ErrorType<unknown>,
       return useMutation(getSaveTranscriptMutationOptions(options));
     }
 
+export const getEndSessionUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/sessions/${sessionId}/end`
+}
+
+/**
+ * @summary Record the end time of an oral session
+ */
+export const endSession = async (sessionId: string, options?: Parameters<typeof customFetch>[1]): Promise<OralSession> => {
+
+  return customFetch<OralSession>(getEndSessionUrl(sessionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getEndSessionMutationKey = () => ['endSession'] as const;
+
+export const getEndSessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endSession>>, TError,EndSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof endSession>>, TError,EndSessionMutationVariables, TContext> => {
+
+const mutationKey = getEndSessionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof endSession>>, EndSessionMutationVariables> = (props) => {
+          const {sessionId} = props ?? {};
+
+          return  endSession(sessionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EndSessionMutationResult = NonNullable<Awaited<ReturnType<typeof endSession>>>
+
+    export type EndSessionMutationError = ErrorType<unknown>
+    export type EndSessionMutationVariables = {sessionId: string}
+
+    /**
+ * @summary Record the end time of an oral session
+ */
+export const useEndSession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof endSession>>, TError,EndSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof endSession>>,
+        TError,
+        EndSessionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getEndSessionMutationOptions(options));
+    }
+
 export const getSaveScoreUrl = () => {
 
 

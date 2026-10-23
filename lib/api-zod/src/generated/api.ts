@@ -123,7 +123,10 @@ export const GetSessionsResponseItem = zod.object({
   "lectureId": zod.number().int().nullable(),
   "attempt": zod.number().int(),
   "startedAt": zod.coerce.date(),
-  "endedAt": zod.coerce.date().nullable()
+  "endedAt": zod.coerce.date().nullable(),
+  "examQuestions": zod.array(zod.object({
+  "prompt": zod.string()
+})).optional()
 })
 export const GetSessionsResponse = zod.array(GetSessionsResponseItem)
 
@@ -146,7 +149,10 @@ export const CreateSessionResponse = zod.object({
   "lectureId": zod.number().int().nullable(),
   "attempt": zod.number().int(),
   "startedAt": zod.coerce.date(),
-  "endedAt": zod.coerce.date().nullable()
+  "endedAt": zod.coerce.date().nullable(),
+  "examQuestions": zod.array(zod.object({
+  "prompt": zod.string()
+})).optional()
 })
 
 
@@ -172,6 +178,26 @@ export const SaveTranscriptResponse = zod.object({
   "text": zod.string(),
   "context": zod.string().nullable(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Record the end time of an oral session
+ */
+export const EndSessionParams = zod.object({
+  "sessionId": zod.coerce.string().uuid()
+})
+
+export const EndSessionResponse = zod.object({
+  "id": zod.string(),
+  "mode": zod.enum(['dialogue', 'lecture_questions', 'final_exam']),
+  "lectureId": zod.number().int().nullable(),
+  "attempt": zod.number().int(),
+  "startedAt": zod.coerce.date(),
+  "endedAt": zod.coerce.date().nullable(),
+  "examQuestions": zod.array(zod.object({
+  "prompt": zod.string()
+})).optional()
 })
 
 
@@ -268,6 +294,7 @@ export const gradeExamAnswerBodyQuestionIndexMax = 4;
 
 
 export const GradeExamAnswerBody = zod.object({
+  "sessionId": zod.string().uuid(),
   "questionIndex": zod.number().int().min(gradeExamAnswerBodyQuestionIndexMin).max(gradeExamAnswerBodyQuestionIndexMax),
   "studentAnswer": zod.string(),
   "followUpAnswer": zod.string().optional(),

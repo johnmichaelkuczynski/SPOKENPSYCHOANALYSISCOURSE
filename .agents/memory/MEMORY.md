@@ -1,0 +1,2 @@
+- [Spoken-class requirement](spoken-class.md) — professor speech is mandatory, and ElevenLabs must use the user's own securely stored API key.
+- [Anonymous preview quotas](preview-quotas.md) — proxied browser and shell requests can share an IP; do not treat that IP as a unique visitor.

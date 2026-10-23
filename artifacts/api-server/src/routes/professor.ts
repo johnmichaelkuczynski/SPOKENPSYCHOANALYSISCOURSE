@@ -18,6 +18,7 @@ import { getStudentId, requireStudent } from "../middlewares/requireStudent";
 
 const router: IRouter = Router();
 const course = getInternalCourse();
+let openingPreviewAudio: Buffer | undefined;
 const guestUse = new Map<string, number>();
 const guestPending = new Set<string>();
 const guestIntervalMs = 24 * 60 * 60 * 1000;
@@ -281,10 +282,19 @@ router.post("/voice/speech", async (req, res): Promise<void> => {
     res.status(413).json({ error: "This spoken passage is too long." });
     return;
   }
-  if (!authUserId && !allowOneGuestUse(req, res, "speech")) return;
+  const opening = course.lectures[0]?.sections[0];
+  const isOpeningPreview = Boolean(opening && parsed.data.text.trim() === `${opening.heading}. ${opening.text}`);
+  const limitedGuest = !authUserId && !isOpeningPreview;
+  if (isOpeningPreview && openingPreviewAudio) {
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(openingPreviewAudio);
+    return;
+  }
+  if (limitedGuest && !allowOneGuestUse(req, res, "speech")) return;
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
-    if (!authUserId) finishGuestUse(req, "speech", false);
+    if (limitedGuest) finishGuestUse(req, "speech", false);
     res.status(503).json({ error: "ELEVENLABS_API_KEY is not configured." });
     return;
   }
@@ -307,17 +317,24 @@ router.post("/voice/speech", async (req, res): Promise<void> => {
       },
     );
     if (!upstream.ok || !upstream.body) {
-      if (!authUserId) finishGuestUse(req, "speech", false);
+      if (limitedGuest) finishGuestUse(req, "speech", false);
       res.status(502).json({ error: "ElevenLabs could not generate professor speech." });
       return;
     }
-    if (!authUserId) finishGuestUse(req, "speech", true);
+    if (limitedGuest) finishGuestUse(req, "speech", true);
     res.status(200);
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
-    Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream).pipe(res);
+    const audioStream = Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream);
+    if (isOpeningPreview) {
+      const chunks: Buffer[] = [];
+      audioStream.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+      audioStream.on("end", () => { openingPreviewAudio = Buffer.concat(chunks); });
+    }
+    audioStream.on("error", () => res.destroy());
+    audioStream.pipe(res);
   } catch {
-    if (!authUserId) finishGuestUse(req, "speech", false);
+    if (limitedGuest) finishGuestUse(req, "speech", false);
     providerError(res, "ElevenLabs speech is unavailable. No text-only professor response was provided.");
   }
 });

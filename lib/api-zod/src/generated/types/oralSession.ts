@@ -5,6 +5,7 @@
  * Oral course API
  * OpenAPI spec version: 0.1.0
  */
+import type { OralSessionExamQuestionsItem } from './oralSessionExamQuestionsItem';
 import type { OralSessionMode } from './oralSessionMode';
 
 export interface OralSession {
@@ -16,4 +17,5 @@ export interface OralSession {
   startedAt: Date;
   /** @nullable */
   endedAt: Date | null;
+  examQuestions?: OralSessionExamQuestionsItem[];
 }

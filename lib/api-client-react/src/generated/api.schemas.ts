@@ -138,6 +138,10 @@ export const OralSessionMode = {
   final_exam: 'final_exam',
 } as const;
 
+export type OralSessionExamQuestionsItem = {
+  prompt: string;
+};
+
 export interface OralSession {
   id: string;
   mode: OralSessionMode;
@@ -147,6 +151,7 @@ export interface OralSession {
   startedAt: string;
   /** @nullable */
   endedAt: string | null;
+  examQuestions?: OralSessionExamQuestionsItem[];
 }
 
 export type SessionInputMode = typeof SessionInputMode[keyof typeof SessionInputMode];
@@ -294,6 +299,7 @@ export interface LectureGrade {
 }
 
 export interface ExamGradeInput {
+  sessionId: string;
   /**
      * @minimum 0
      * @maximum 4

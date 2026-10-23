@@ -29,6 +29,7 @@ export * from './lectureProgressStatus';
 export * from './lectureQuestion';
 export * from './lectureSection';
 export * from './oralSession';
+export * from './oralSessionExamQuestionsItem';
 export * from './oralSessionMode';
 export * from './progress';
 export * from './progressResult';

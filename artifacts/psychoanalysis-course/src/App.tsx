@@ -97,6 +97,7 @@ function CourseHome() {
           <Link href="/sign-up" className="primary-action" data-testid="link-begin-study">Begin studying <ArrowRight size={16} /></Link>
           <span className="text-sm text-[#7c827b]">An oral class, at your own pace</span>
         </div>
+        {course.lectures[0]?.sections[0] && <ProfessorPreview text={`${course.lectures[0].sections[0].heading}. ${course.lectures[0].sections[0].text}`} />}
       </section>
       <div className="divider-label mb-8">The course of study</div>
       <section className="pb-20">
@@ -255,7 +256,12 @@ function useProfessorSpeech() {
           mediaSource.addEventListener('sourceopen', () => resolve(), { once: true });
           mediaSource.addEventListener('error', () => reject(new Error('Audio stream failed.')), { once: true });
         });
-        const playback = audio.play();
+        const playback = audio.play().then(() => {
+          if (sequence === requestSequence.current) {
+            setRequesting(false);
+            setPlaying(true);
+          }
+        }).catch(setFailure);
         const response = await fetch(`${basePath}/api/voice/speech`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -271,7 +277,7 @@ function useProfessorSpeech() {
           const onError = () => { sourceBuffer.removeEventListener('error', onError); reject(new Error('Audio stream could not be decoded.')); };
           sourceBuffer.addEventListener('updateend', onUpdate, { once: true });
           sourceBuffer.addEventListener('error', onError, { once: true });
-          try { sourceBuffer.appendBuffer(chunk); } catch (error) { reject(error); }
+          try { sourceBuffer.appendBuffer(new Uint8Array(chunk).buffer); } catch (error) { reject(error); }
         });
         const reader = response.body.getReader();
         let firstChunk = true;
@@ -283,12 +289,11 @@ function useProfessorSpeech() {
           if (firstChunk) {
             firstChunk = false;
             setRequesting(false);
-            await playback;
-            setPlaying(true);
           }
         }
         if (firstChunk) throw new Error('The speech stream was empty.');
         if (mediaSource.readyState === 'open') mediaSource.endOfStream();
+        await playback;
       } else {
         const blob = await speak.mutateAsync({ data: { text } });
         if (sequence !== requestSequence.current) return false;
@@ -318,9 +323,25 @@ function useProfessorSpeech() {
   const stop = useCallback(() => { requestSequence.current += 1; completionRef.current?.(false); completionRef.current = null; audioRef.current?.pause(); audioRef.current = null; setRequesting(false); setPlaying(false); setPaused(false); }, []);
   const pause = useCallback(() => { if (audioRef.current) { audioRef.current.pause(); setPaused(true); setPlaying(false); } }, []);
   const resume = useCallback(() => { if (audioRef.current) { void audioRef.current.play().then(() => { setPaused(false); setPlaying(true); }).catch(() => setSpeechError('Professor audio could not resume. Please replay the spoken material.')); } }, []);
-  const retry = useCallback(() => { if (lastTextRef.current) void play(lastTextRef.current); }, [play]);
+  const retry = useCallback(() => {
+    if (audioRef.current && !speechError && objectUrlRef.current) {
+      audioRef.current.currentTime = 0;
+      void audioRef.current.play().then(() => { setPlaying(true); setPaused(false); }).catch(() => {
+        if (lastTextRef.current) void play(lastTextRef.current);
+      });
+    } else if (lastTextRef.current) void play(lastTextRef.current);
+  }, [play, speechError]);
   useEffect(() => () => { audioRef.current?.pause(); if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); }, []);
   return { play, stop, pause, resume, retry, hasSpeech: !!lastTextRef.current, speaking: speak.isPending || requesting || playing, paused, speechError };
+}
+
+function ProfessorPreview({ text }: { text: string }) {
+  const speech = useProfessorSpeech();
+  return <div className="mt-8 border-l-2 border-[#b7c8bd] pl-5">
+    <p className="text-sm text-[#64716b] mb-3">Hear the professor teach the opening passage. No account required.</p>
+    {!speech.hasSpeech && <button className="secondary-action" onClick={() => void speech.play(text)} data-testid="button-hear-professor"><Volume2 size={16} /> Hear the professor</button>}
+    <ProfessorAudioControls speech={speech} />
+  </div>;
 }
 
 type OralMode = 'dialogue' | 'lecture_questions' | 'final_exam';
@@ -567,14 +588,13 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
 
   useEffect(() => {
     if (mode === 'lecture_questions' && lecture && questions.length) {
-      speech.play(questions[questionNumber]?.question ?? '');
+      speech.play(lecture.questions[questionNumber]?.question ?? '');
     }
     if (mode === 'final_exam' && currentPrompt) speech.play(currentPrompt);
     // Speech is only started when the active question changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questionIndex, mode, lecture?.id, currentPrompt]);
 
-  useEffect(() => { speech.stop(); }, [speech.stop, questionIndex]);
 
   if (courseQuery.isLoading || progressQuery.isLoading) return <Loading label="Loading oral session" />;
   if (courseQuery.isError || !course || (mode !== 'dialogue' && progressQuery.isError)) return <div className="page-shell"><Header signedIn /><main className="content-column py-14"><QueryError retry={() => { courseQuery.refetch(); progressQuery.refetch(); }} /></main></div>;
@@ -625,7 +645,7 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
         await saveScore.mutateAsync({ data: { kind: 'lecture', lectureId, questionIndex: questionNumber, score: graded.score, feedback: graded.feedback, attempt: activeAttempt, studentAnswer: answer } });
       } else if (mode === 'final_exam') {
         setExamInitialAnswer(answer);
-        const graded = await gradeExam.mutateAsync({ data: { questionIndex, studentAnswer: answer, retake: activeAttempt > 1 } });
+        const graded = await gradeExam.mutateAsync({ data: { sessionId: session.id, questionIndex, studentAnswer: answer, retake: activeAttempt > 1 } });
         if (graded.needsFollowUp && graded.followUp) {
           setFollowUp(graded.followUp);
           setFollowUpPending(true);
@@ -662,7 +682,7 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
     setSubmitted(true);
     try {
       await persistTranscript('student', answer, `${modeLabel} · follow-up ${questionIndex + 1}`);
-      const graded = await gradeExam.mutateAsync({ data: { questionIndex, studentAnswer: examInitialAnswer, followUpAnswer: answer, retake: activeAttempt > 1 } });
+      const graded = await gradeExam.mutateAsync({ data: { sessionId: session.id, questionIndex, studentAnswer: examInitialAnswer, followUpAnswer: answer, retake: activeAttempt > 1 } });
       setGrade({ score: graded.score ?? 0, feedback: graded.feedback ?? '' });
       speech.play(graded.feedback ?? '');
       setQuestionScores((scores) => { const next = [...scores]; next[questionIndex] = graded.score ?? 0; return next; });
