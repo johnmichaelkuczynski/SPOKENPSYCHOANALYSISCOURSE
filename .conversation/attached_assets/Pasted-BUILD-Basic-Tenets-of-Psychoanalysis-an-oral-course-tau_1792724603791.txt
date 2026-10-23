@@ -1,0 +1,80 @@
+BUILD: "Basic Tenets of Psychoanalysis", an oral course taught by an AI professor
+
+OVERVIEW
+Build a web app that delivers a small oral course taught entirely by voice by an AI professor. The full course content (5 lectures, 6 oral questions per lecture with model answers, a 5-question final oral exam with criteria, and a grading rubric) is in the attached file Psychoanalysis_Oral_Course.txt. Parse that file and use it as the single source of truth for all course content. Do not invent or alter lecture content.
+
+API KEYS (store as Replit Secrets)
+- OPENAI_API_KEY: the professor's brain (dialogue, grading, follow-ups, retake scenarios). Put the model name in an env var OPENAI_MODEL so it can be changed.
+- ASSEMBLYAI_API_KEY: speech-to-text for everything the student says (use real-time streaming transcription).
+- ELEVENLABS_API_KEY: text-to-speech for everything the professor says (use streaming TTS for low latency). Put the voice ID in an env var ELEVENLABS_VOICE_ID.
+
+STACK
+- Frontend: React. Backend: Node/Express. Database: Postgres via DATABASE_URL.
+- Never expose API keys to the browser. All calls to OpenAI, AssemblyAI, and ElevenLabs go through the backend. For AssemblyAI streaming, the backend issues a temporary token to the browser.
+
+STUDENT ACCOUNTS
+- Simple sign-up and login (email + password).
+- Store per student: progress, every transcript, every score, and timestamps.
+
+THE FOUR MODES
+The app is always in exactly one of these modes. Show the current mode clearly on screen.
+
+1. LECTURE MODE
+- The professor reads the lecture aloud via ElevenLabs, verbatim from the course file, one section at a time (introduction, the six numbered topics, conclusion).
+- The lecture text is displayed on screen, and the section being read is highlighted.
+- Controls: Play, Pause, Replay section, Next section.
+- The student may interrupt at any time by pressing "Ask a question". This pauses the lecture and opens Dialogue Mode. When the dialogue ends, the student presses "Resume lecture" and the lecture continues from where it paused.
+- When the lecture finishes, the button "Begin Lecture Questions" appears.
+
+2. DIALOGUE MODE (available at any time except during tests)
+- The student can ask the professor as many questions as he wants, by voice, with no limit.
+- Push-to-talk: the student holds a button (or presses the spacebar) to speak. AssemblyAI transcribes, the transcript goes to OpenAI with the professor's system prompt, and the reply is spoken via ElevenLabs. Show both sides of the conversation as text too.
+- Professor system prompt: "You are a professor teaching Basic Tenets of Psychoanalysis. Answer the student's questions clearly and concisely in spoken style (short paragraphs, no lists or markdown). Ground answers in the course content provided below. You may go beyond it to clarify, but never contradict it. Engage objections seriously. Keep answers under about 150 words unless the student asks for more." Then append the full course text, EXCLUDING the lecture questions' model answers, the final exam questions, and the final exam criteria.
+- Keep conversation history within a session so follow-up questions work.
+- Dialogue Mode is reachable from the course home screen, from Lecture Mode, and between tests. It is NOT reachable during Lecture Questions or the Final Exam.
+
+3. LECTURE QUESTIONS MODE (a test, so dialogue is locked)
+- After each lecture, the professor asks that lecture's 6 questions aloud, one at a time.
+- The student answers by voice (push-to-talk). Show the transcript, and allow one re-record before submitting.
+- Grading: send OpenAI the question, the model answer from the course file, and the student's transcript. Ask for strict JSON: {"score": 0|1|2, "feedback": "one sentence"}. Rubric: 2 = correct and uses the concept accurately; 1 = partially correct or vague; 0 = wrong or no answer. Judge meaning, not wording.
+- After each answer, the professor speaks the score and the one-sentence feedback. Never reveal a model answer before the student has answered.
+- At the end of the set, show the total out of 12.
+- To unlock the next lecture, the student needs at least 8 of 12. If he scores lower, he may retry the questions he missed once. The retry score replaces the original score for those questions.
+- If he still has fewer than 8 after the retry, the lecture and Dialogue Mode stay available for review. He may retake that lecture's question set after 24 hours.
+- During this mode, disable and hide the "Ask a question" control. If the student tries to ask the professor something mid-test, the professor replies: "Questions are closed during the test. You can ask me anything once it's over."
+
+4. FINAL EXAM MODE (a test, so dialogue is locked)
+- Unlocks only after all 5 lectures' question sets are passed.
+- The professor asks the 5 final exam questions aloud, one at a time.
+- After the student's answer, OpenAI decides whether the answer is vague or incomplete against the criteria for that question. If it is, the professor asks ONE short follow-up probe (generated by OpenAI from the criteria), and the student answers. A maximum of one follow-up per question.
+- Grading: send OpenAI the question, the criteria from the course file, the student's answer(s), and whether a follow-up was used. Ask for strict JSON: {"score": 0-4, "feedback": "two sentences max"}. Rubric: 4 = correct concepts, applied precisely to the scenario, conclusion justified, no prompting needed; 3 = sound with minor gaps, or needed one follow-up; 2 = correct concepts but weak application or unjustified conclusion; 1 = uses the terms without showing understanding; 0 = wrong or no substantive answer.
+- Do not speak scores during the exam. At the end, the professor announces the result.
+- Pass mark: at least 14 of 20.
+- Retake: one retake allowed, no sooner than 48 hours later. For the retake, OpenAI generates 5 NEW scenarios that test the same concepts as the originals at the same difficulty, each with its own criteria. Store them.
+
+FINAL RESULT (results page)
+- Lecture-question total out of 60 (sum of the best attempts) and final exam total out of 20.
+- Pass: at least 42/60 AND at least 14/20. Both are required.
+- Pass with distinction: at least 54/60 AND at least 18/20.
+- Final grade % = (lecture % x 0.4) + (exam % x 0.6).
+- Show a simple completion certificate page for passing students (name, course title, date, result).
+
+COURSE HOME SCREEN
+- List the 5 lectures with their status: locked / available / passed (with score).
+- Show the Final Exam card with its status.
+- A persistent "Talk to the Professor" button (Dialogue Mode), disabled only during tests.
+
+VOICE UX REQUIREMENTS
+- Show visible states: "Professor speaking", "Listening", "Thinking".
+- The student can always stop the professor's audio.
+- If the microphone is unavailable, show a clear error. Do not fall back to typing; this is an oral course.
+- Keep latency low by streaming TTS audio as it is generated.
+
+STORAGE
+Save every transcript (lecture-question answers, exam answers, follow-ups, dialogue sessions), every score with its feedback, attempt counts, and timestamps, so results can be audited.
+
+DESIGN
+Clean, calm, academic. One main column. Large readable lecture text. Prominent push-to-talk button. Works on desktop and mobile browsers.
+
+DELIVERABLE
+A working, deployed app in which a student can sign up, take Lecture 1 by voice, ask the professor questions, answer the Lecture 1 questions orally and be graded, progress through all 5 lectures, and take the final oral exam with a result page.
