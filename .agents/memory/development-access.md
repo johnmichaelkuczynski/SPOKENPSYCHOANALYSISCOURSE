@@ -1,10 +1,10 @@
 ---
-name: Development access
-description: Standing requirement for automatic access in the development preview only.
+name: Course access
+description: The existing sign-in system must be removed; Google login is deferred.
 ---
 
-The user requires that in the development area they are always signed in.
+The user requested removal of the current sign-in system. They said proper Google login will be installed later. Do not reintroduce Clerk or another login system now.
 
-**Why:** The user explicitly requested uninterrupted development access without signing in.
+**Why:** The user explicitly rejected the existing login setup and asked for its removal.
 
-**How to apply:** Preserve automatic development-only course access and persistent development progress. Keep the published app's real authentication requirements unchanged. The preview session is a separate development identity, not a Clerk login to the user's production account.
+**How to apply:** Keep course access open without login prompts. Preserve existing course work without merging different visitors into a shared production identity. Google authentication is a future request, not part of this removal.

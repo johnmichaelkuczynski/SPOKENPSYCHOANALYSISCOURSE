@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ClerkProvider, Show, SignIn, SignUp, useClerk, useUser } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
-import { shadcn } from '@clerk/themes';
-import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Headphones, LockKeyhole, LogOut, Mic, RotateCcw, Volume2 } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Headphones, LockKeyhole, Mic, RotateCcw, Volume2 } from 'lucide-react';
 import { Link, Redirect, Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import {
   useAskProfessor, useCreateSession, useGetActivity, useGetCourse, useGetProgress,
@@ -15,39 +12,6 @@ import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
-// Vite replaces DEV with false in published builds.
-const developmentSession = import.meta.env.DEV;
-
-function stripBase(path: string) {
-  return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
-}
-
-const clerkAppearance = {
-  theme: shadcn,
-  cssLayerName: 'clerk',
-  options: { logoPlacement: 'inside' as const, logoLinkUrl: basePath || '/', logoImageUrl: `${window.location.origin}${basePath}/logo.svg` },
-  variables: {
-    colorPrimary: '#315e53', colorForeground: '#273b38', colorMutedForeground: '#697873',
-    colorDanger: '#a94d45', colorBackground: '#faf8f2', colorInput: '#fffdf8',
-    colorInputForeground: '#273b38', colorNeutral: '#d8d2c5', fontFamily: "'DM Sans', sans-serif", borderRadius: '0.75rem',
-  },
-  elements: {
-    rootBox: 'w-full flex justify-center',
-    cardBox: 'bg-[#faf8f2] rounded-2xl w-[440px] max-w-full overflow-hidden',
-    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    headerTitle: 'text-[#273b38] font-serif', headerSubtitle: 'text-[#697873]',
-    socialButtonsBlockButtonText: 'text-[#273b38]', formFieldLabel: 'text-[#273b38]',
-    footerActionLink: 'text-[#315e53]', footerActionText: 'text-[#697873]', dividerText: 'text-[#697873]',
-    identityPreviewEditButton: 'text-[#315e53]', formFieldSuccessText: 'text-[#315e53]', alertText: 'text-[#7e3c35]',
-    logoBox: 'rounded-full', logoImage: 'rounded-full', socialButtonsBlockButton: 'border-[#d8d2c5] bg-[#fffdf8]',
-    formButtonPrimary: 'bg-[#315e53] hover:bg-[#244c43]', formFieldInput: 'border-[#d8d2c5] bg-[#fffdf8]',
-    footerAction: 'border-t border-[#e5e0d5]', dividerLine: 'bg-[#e5e0d5]', alert: 'bg-[#f7e9e5]',
-    otpCodeFieldInput: 'border-[#d8d2c5]', formFieldRow: 'text-[#273b38]', main: 'text-[#273b38]',
-  },
-};
 
 function Brand() {
   return <Link href="/" className="brand-mark" data-testid="link-home-brand">
@@ -56,14 +20,9 @@ function Brand() {
   </Link>;
 }
 
-function Header({ signedIn = false }: { signedIn?: boolean }) {
-  const { signOut } = useClerk();
+function Header(_props: { signedIn?: boolean }) {
   return <header className="topbar">
     <Brand />
-    <nav className="flex items-center gap-5">
-      {developmentSession ? <span className="quiet-link" data-testid="text-development-session">Development session · signed in</span> : signedIn ? <button className="quiet-link inline-flex items-center gap-2" onClick={() => signOut({ redirectUrl: basePath || '/' })} data-testid="button-sign-out"><LogOut size={15} /> Sign out</button> :
-        <><Link className="quiet-link" href="/sign-in" data-testid="link-sign-in">Sign in</Link><Link href="/sign-up" className="primary-action !py-[10px] !px-[17px]" data-testid="link-sign-up">Join the course</Link></>}
-    </nav>
   </header>;
 }
 
@@ -83,11 +42,12 @@ function QueryError({ retry }: { retry: () => void }) {
 
 function CourseHome() {
   const courseQuery = useGetCourse();
-  const { isSignedIn, isLoaded } = useUser();
-  if (courseQuery.isLoading || (!developmentSession && !isLoaded)) return <Loading />;
+  if (courseQuery.isLoading) return <Loading />;
   if (courseQuery.isError || !courseQuery.data) return <div className="page-shell"><Header /><main className="content-column py-16"><QueryError retry={() => courseQuery.refetch()} /></main></div>;
-  if (developmentSession || isSignedIn) return <Portal course={courseQuery.data} />;
-  const course = courseQuery.data;
+  return <Portal course={courseQuery.data} />;
+}
+
+function CourseIntroduction({ course }: { course: Course }) {
   return <div className="page-shell">
     <Header />
     <main className="main-wrap">
@@ -96,7 +56,7 @@ function CourseHome() {
         <h1 className="serif text-[clamp(48px,8vw,82px)] leading-[1.03] tracking-[-.045em] max-w-[780px] text-[#263b38]" data-testid="text-course-title">{course.title}</h1>
         <p className="serif text-[clamp(21px,3vw,29px)] leading-relaxed text-[#65716b] mt-6 max-w-[650px]" data-testid="text-course-subtitle">{course.subtitle}</p>
         <div className="mt-10 flex flex-wrap items-center gap-4">
-          <Link href="/sign-up" className="primary-action" data-testid="link-begin-study">Begin studying <ArrowRight size={16} /></Link>
+          <Link href="/" className="primary-action" data-testid="link-begin-study">Begin studying <ArrowRight size={16} /></Link>
           <span className="text-sm text-[#7c827b]">An oral class, at your own pace</span>
         </div>
         {course.lectures[0]?.sections[0] && <ProfessorPreview text={`${course.lectures[0].sections[0].heading}. ${course.lectures[0].sections[0].text}`} />}
@@ -901,20 +861,11 @@ function Results() {
   </main></div>;
 }
 
-function Protected({ children }: { children: ReactNode }) {
-  const { isLoaded } = useUser();
-  if (developmentSession) return <>{children}</>;
-  if (!isLoaded) return <Loading />;
-  return <><Show when="signed-in">{children}</Show><Show when="signed-out"><Redirect to="/" /></Show></>;
-}
-
-function SignInPage() {
-  if (developmentSession) return <Redirect to="/" />;
-  return <div className="page-shell"><Header /><div className="min-h-[calc(100dvh-72px)] grid place-items-center px-4 py-10"><SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></div></div>;
-}
-function SignUpPage() {
-  if (developmentSession) return <Redirect to="/" />;
-  return <div className="page-shell"><Header /><div className="min-h-[calc(100dvh-72px)] grid place-items-center px-4 py-10"><SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></div></div>;
+function OverviewPage() {
+  const query = useGetCourse();
+  if (query.isLoading) return <Loading />;
+  if (!query.data || query.isError) return <div className="page-shell"><Header /><main className="content-column py-14"><QueryError retry={() => query.refetch()} /></main></div>;
+  return <CourseIntroduction course={query.data} />;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
@@ -925,44 +876,20 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 function Routes() {
   return <RoutedErrorBoundary><Switch>
     <Route path="/" component={CourseHome} />
-    <Route path="/sign-in/*?" component={SignInPage} />
-    <Route path="/sign-up/*?" component={SignUpPage} />
-    <Route path="/lecture/:lectureId/questions">{(params) => <Protected><OralRoom mode="lecture_questions" lectureId={Number(params.lectureId)} /></Protected>}</Route>
-    <Route path="/lecture/:lectureId">{(params) => <Protected><LecturePage lectureId={Number(params.lectureId)} /></Protected>}</Route>
-    <Route path="/dialogue">{() => <Protected><OralRoom mode="dialogue" /></Protected>}</Route>
-    <Route path="/exam">{() => <Protected><OralRoom mode="final_exam" /></Protected>}</Route>
-    <Route path="/results">{() => <Protected><Results /></Protected>}</Route>
+    <Route path="/overview" component={OverviewPage} />
+    <Route path="/sign-in/*?">{() => <Redirect to="/" />}</Route>
+    <Route path="/sign-up/*?">{() => <Redirect to="/" />}</Route>
+    <Route path="/lecture/:lectureId/questions">{(params) => <OralRoom mode="lecture_questions" lectureId={Number(params.lectureId)} />}</Route>
+    <Route path="/lecture/:lectureId">{(params) => <LecturePage lectureId={Number(params.lectureId)} />}</Route>
+    <Route path="/dialogue">{() => <OralRoom mode="dialogue" />}</Route>
+    <Route path="/exam">{() => <OralRoom mode="final_exam" />}</Route>
+    <Route path="/results">{() => <Results />}</Route>
     <Route component={NotFound} />
   </Switch></RoutedErrorBoundary>;
 }
 
-function ClerkRoutes() {
-  const [, setLocation] = useLocation();
-  return <ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={clerkAppearance}
-    signInUrl={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`}
-    localization={{ signIn: { start: { title: 'Welcome back', subtitle: 'Return to your course room' } }, signUp: { start: { title: 'Join the course', subtitle: 'Begin your oral study' } } }}
-    routerPush={(to) => setLocation(stripBase(to))}
-    routerReplace={(to) => setLocation(stripBase(to), { replace: true })}>
-    <ClerkQueryClientCacheInvalidator />
-    <Routes />
-  </ClerkProvider>;
-}
-
-function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
-  const cache = useQueryClient();
-  const previous = useRef<string | null | undefined>(undefined);
-  useEffect(() => addListener(({ user }) => {
-    const userId = user?.id ?? null;
-    if (previous.current !== undefined && previous.current !== userId) cache.clear();
-    previous.current = userId;
-  }), [addListener, cache]);
-  return null;
-}
-
 function App() {
-  if (!clerkPubKey) return <div className="page-shell"><main className="content-column py-16"><p className="serif text-2xl">Authentication is not configured.</p></main></div>;
-  return <QueryClientProvider client={queryClient}><WouterRouter base={basePath}><ClerkRoutes /></WouterRouter></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><WouterRouter base={basePath}><Routes /></WouterRouter></QueryClientProvider>;
 }
 
 export default App;

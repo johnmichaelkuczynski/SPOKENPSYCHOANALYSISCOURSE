@@ -1,3 +1,3 @@
 - [Spoken-class requirement](spoken-class.md) — professor speech is mandatory, and ElevenLabs must use the user's own securely stored API key.
 - [Anonymous preview quotas](preview-quotas.md) — proxied browser and shell requests can share an IP; do not treat that IP as a unique visitor.
-- [Development access](development-access.md) — development must open with persistent signed-in course access; published authentication must remain unchanged.
+- [Course access](development-access.md) — remove the current login system; keep course access open. Direct Google login is deferred until explicitly requested.

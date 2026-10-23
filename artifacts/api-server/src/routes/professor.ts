@@ -28,7 +28,7 @@ function allowOneGuestUse(req: Request, res: Response, key: string): boolean {
   const storeKey = `${key}:${ip}`;
   const lastUse = guestUse.get(storeKey);
   if ((lastUse && now - lastUse < guestIntervalMs) || guestPending.has(storeKey)) {
-    res.status(429).json({ error: "The free spoken preview has been used. Sign in to continue the course." });
+    res.status(429).json({ error: "The spoken preview limit has been reached. Please try again later." });
     return false;
   }
   guestPending.add(storeKey);
@@ -72,7 +72,7 @@ function providerError(res: Response, message: string): void {
 }
 
 router.post("/professor/dialogue", async (req, res): Promise<void> => {
-  const authUserId = getEffectiveUserId(req);
+  const authUserId = getEffectiveUserId(req, res);
   const parsed = AskProfessorBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -243,7 +243,7 @@ router.post("/professor/grade-exam", requireStudent, async (req, res): Promise<v
 });
 
 router.post("/voice/transcription-token", async (req, res): Promise<void> => {
-  const authUserId = getEffectiveUserId(req);
+  const authUserId = getEffectiveUserId(req, res);
   const apiKey = process.env.ASSEMBLYAI_API_KEY;
   if (!apiKey) {
     res.status(503).json({ error: "Speech transcription is not configured." });
@@ -270,7 +270,7 @@ router.post("/voice/transcription-token", async (req, res): Promise<void> => {
 });
 
 router.post("/voice/speech", async (req, res): Promise<void> => {
-  const authUserId = getEffectiveUserId(req);
+  const authUserId = getEffectiveUserId(req, res);
   const parsed = SpeakTextBody.safeParse(req.body);
   if (!parsed.success || parsed.data.text.trim().length === 0) {
     res.status(400).json({ error: "Professor speech requires text." });
