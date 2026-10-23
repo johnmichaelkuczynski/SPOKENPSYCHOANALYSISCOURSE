@@ -1,8 +1,14 @@
 import { getAuth } from "@clerk/express";
 import type { NextFunction, Request, Response } from "express";
 
+// A separate, persistent local student; never accepted by a production server.
+export function getEffectiveUserId(req: Request): string | null {
+  return getAuth(req).userId ??
+    (process.env.NODE_ENV === "development" ? "development-preview-student" : null);
+}
+
 export function requireStudent(req: Request, res: Response, next: NextFunction): void {
-  const { userId } = getAuth(req);
+  const userId = getEffectiveUserId(req);
   if (!userId) {
     res.status(401).json({ error: "Sign in to save course progress." });
     return;

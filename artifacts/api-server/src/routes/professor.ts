@@ -1,6 +1,5 @@
 import { Readable } from "node:stream";
 import { Router, type IRouter, type Request, type Response } from "express";
-import { getAuth } from "@clerk/express";
 import { and, eq } from "drizzle-orm";
 import {
   AskProfessorBody,
@@ -14,7 +13,7 @@ import {
 } from "@workspace/api-zod";
 import { db, oralExamScenariosTable, oralSessionsTable } from "@workspace/db";
 import { getInternalCourse } from "../lib/courseContent";
-import { getStudentId, requireStudent } from "../middlewares/requireStudent";
+import { getEffectiveUserId, getStudentId, requireStudent } from "../middlewares/requireStudent";
 
 const router: IRouter = Router();
 let openingPreviewAudio: Buffer | undefined;
@@ -73,7 +72,7 @@ function providerError(res: Response, message: string): void {
 }
 
 router.post("/professor/dialogue", async (req, res): Promise<void> => {
-  const authUserId = getAuth(req).userId;
+  const authUserId = getEffectiveUserId(req);
   const parsed = AskProfessorBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -244,7 +243,7 @@ router.post("/professor/grade-exam", requireStudent, async (req, res): Promise<v
 });
 
 router.post("/voice/transcription-token", async (req, res): Promise<void> => {
-  const authUserId = getAuth(req).userId;
+  const authUserId = getEffectiveUserId(req);
   const apiKey = process.env.ASSEMBLYAI_API_KEY;
   if (!apiKey) {
     res.status(503).json({ error: "Speech transcription is not configured." });
@@ -271,7 +270,7 @@ router.post("/voice/transcription-token", async (req, res): Promise<void> => {
 });
 
 router.post("/voice/speech", async (req, res): Promise<void> => {
-  const authUserId = getAuth(req).userId;
+  const authUserId = getEffectiveUserId(req);
   const parsed = SpeakTextBody.safeParse(req.body);
   if (!parsed.success || parsed.data.text.trim().length === 0) {
     res.status(400).json({ error: "Professor speech requires text." });

@@ -17,6 +17,8 @@ const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+// Vite replaces DEV with false in published builds.
+const developmentSession = import.meta.env.DEV;
 
 function stripBase(path: string) {
   return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
@@ -59,7 +61,7 @@ function Header({ signedIn = false }: { signedIn?: boolean }) {
   return <header className="topbar">
     <Brand />
     <nav className="flex items-center gap-5">
-      {signedIn ? <button className="quiet-link inline-flex items-center gap-2" onClick={() => signOut({ redirectUrl: basePath || '/' })} data-testid="button-sign-out"><LogOut size={15} /> Sign out</button> :
+      {developmentSession ? <span className="quiet-link" data-testid="text-development-session">Development session · signed in</span> : signedIn ? <button className="quiet-link inline-flex items-center gap-2" onClick={() => signOut({ redirectUrl: basePath || '/' })} data-testid="button-sign-out"><LogOut size={15} /> Sign out</button> :
         <><Link className="quiet-link" href="/sign-in" data-testid="link-sign-in">Sign in</Link><Link href="/sign-up" className="primary-action !py-[10px] !px-[17px]" data-testid="link-sign-up">Join the course</Link></>}
     </nav>
   </header>;
@@ -82,9 +84,9 @@ function QueryError({ retry }: { retry: () => void }) {
 function CourseHome() {
   const courseQuery = useGetCourse();
   const { isSignedIn, isLoaded } = useUser();
-  if (courseQuery.isLoading || !isLoaded) return <Loading />;
+  if (courseQuery.isLoading || (!developmentSession && !isLoaded)) return <Loading />;
   if (courseQuery.isError || !courseQuery.data) return <div className="page-shell"><Header /><main className="content-column py-16"><QueryError retry={() => courseQuery.refetch()} /></main></div>;
-  if (isSignedIn) return <Portal course={courseQuery.data} />;
+  if (developmentSession || isSignedIn) return <Portal course={courseQuery.data} />;
   const course = courseQuery.data;
   return <div className="page-shell">
     <Header />
@@ -901,14 +903,17 @@ function Results() {
 
 function Protected({ children }: { children: ReactNode }) {
   const { isLoaded } = useUser();
+  if (developmentSession) return <>{children}</>;
   if (!isLoaded) return <Loading />;
   return <><Show when="signed-in">{children}</Show><Show when="signed-out"><Redirect to="/" /></Show></>;
 }
 
 function SignInPage() {
+  if (developmentSession) return <Redirect to="/" />;
   return <div className="page-shell"><Header /><div className="min-h-[calc(100dvh-72px)] grid place-items-center px-4 py-10"><SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></div></div>;
 }
 function SignUpPage() {
+  if (developmentSession) return <Redirect to="/" />;
   return <div className="page-shell"><Header /><div className="min-h-[calc(100dvh-72px)] grid place-items-center px-4 py-10"><SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></div></div>;
 }
 
