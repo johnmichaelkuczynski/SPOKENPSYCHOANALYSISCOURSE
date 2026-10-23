@@ -2,3 +2,4 @@
 - [Anonymous preview quotas](preview-quotas.md) — proxied browser and shell requests can share an IP; do not treat that IP as a unique visitor.
 - [Course access](development-access.md) — remove the current login system; keep course access open. Direct Google login is deferred until explicitly requested.
 - [Applied assessment](applied-assessment.md) — every test/homework question must present a fresh situation for the student to adjudicate, not recall a lecture case.
+- [Ungraded professor access](professor-dialogue.md) — students must be able to speak or write to the professor at any point; replies are spoken, with no effect on scores.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Headphones, LockKeyhole, Mic, RotateCcw, Volume2 } from 'lucide-react';
 import { Link, Redirect, Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
@@ -10,9 +10,11 @@ import {
 import type { ActivityFeed, Course, Lecture, OralSession, Progress } from '@workspace/api-client-react';
 import NotFound from '@/pages/not-found';
 import { updateSpeechPreferences, useSpeechPreferences } from '@/lib/speechPreferences';
+import ProfessorDialoguePanel, { type DialogueMessage } from '@/components/professor-dialogue-panel';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const DialogueContext = createContext({ open: () => {}, isOpen: false });
 
 function Brand() {
   return <Link href="/" className="brand-mark" data-testid="link-home-brand">
@@ -23,9 +25,12 @@ function Brand() {
 
 function Header(_props: { signedIn?: boolean }) {
   const preferences = useSpeechPreferences();
+  const dialogue = useContext(DialogueContext);
   return <header className="topbar !h-auto min-h-[72px] !flex-wrap gap-3 py-3">
     <Brand />
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#58756b]">
+      <button type="button" onClick={dialogue.open} className="quiet-link inline-flex items-center gap-1.5"
+        data-testid="button-open-professor-dialogue" aria-haspopup="dialog"><CircleHelp size={15} /> Ask the professor</button>
       <label className="inline-flex items-center gap-2">Professor voice
         <select aria-label="Professor voice" data-testid="select-professor-voice" value={preferences.voice}
           onChange={(event) => updateSpeechPreferences({ voice: event.target.value === 'female' ? 'female' : 'male' })}
@@ -107,6 +112,7 @@ function CourseIntroduction({ course }: { course: Course }) {
 }
 
 function Portal({ course }: { course: Course }) {
+  const professorDialogue = useContext(DialogueContext);
   const progressQuery = useGetProgress();
   const activityQuery = useGetActivity();
   const updateProgress = useUpdateLectureProgress();
@@ -132,7 +138,7 @@ function Portal({ course }: { course: Course }) {
       <div className="flex flex-wrap items-end justify-between gap-5 mb-11">
         <div><p className="eyebrow text-[#58756b] mb-3">Your course room</p><h1 className="serif text-4xl md:text-5xl text-[#263b38]">Welcome, {progress.displayName}</h1></div>
         <div className="flex gap-3">
-          <Link href="/dialogue" className="secondary-action" data-testid="link-dialogue"><CircleHelp size={16} /> Ask the professor</Link>
+          <button type="button" onClick={professorDialogue.open} className="secondary-action" data-testid="link-dialogue"><CircleHelp size={16} /> Ask the professor</button>
           <Link href="/results" className="secondary-action" data-testid="link-results">Results <ArrowRight size={15} /></Link>
         </div>
       </div>
@@ -175,7 +181,7 @@ function Portal({ course }: { course: Course }) {
   </div>;
 }
 
-function useProfessorSpeech() {
+function useProfessorSpeech(channel: 'course' | 'dialogue' = 'course') {
   const speak = useSpeakText();
   const preferences = useSpeechPreferences();
   const preferencesRef = useRef(preferences);
@@ -184,12 +190,41 @@ function useProfessorSpeech() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const requestSequence = useRef(0);
+  const dialogueHeld = useRef(false);
+  const resumeAfterDialogue = useRef(false);
   const completionRef = useRef<((played: boolean) => void) | null>(null);
   const lastTextRef = useRef('');
   const [playing, setPlaying] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [paused, setPaused] = useState(false);
   const [speechError, setSpeechError] = useState('');
+  useEffect(() => {
+    if (channel !== 'course') return;
+    const onDialogueOpen = () => {
+      dialogueHeld.current = true;
+      const audio = audioRef.current;
+      resumeAfterDialogue.current = Boolean(audio && !audio.ended && !audio.paused);
+      if (audio && !audio.paused) {
+        audio.pause();
+        setPlaying(false);
+        setPaused(true);
+      }
+    };
+    const onDialogueClose = () => {
+      dialogueHeld.current = false;
+      if (resumeAfterDialogue.current && audioRef.current && !audioRef.current.ended) {
+        void audioRef.current.play().then(() => { setPaused(false); setPlaying(true); })
+          .catch(() => setSpeechError('Professor audio could not resume. Please replay the spoken material.'));
+      }
+      resumeAfterDialogue.current = false;
+    };
+    window.addEventListener('professor-dialogue-open', onDialogueOpen);
+    window.addEventListener('professor-dialogue-close', onDialogueClose);
+    return () => {
+      window.removeEventListener('professor-dialogue-open', onDialogueOpen);
+      window.removeEventListener('professor-dialogue-close', onDialogueClose);
+    };
+  }, [channel]);
   const play = useCallback(async (text: string): Promise<boolean> => {
     const sequence = ++requestSequence.current;
     lastTextRef.current = text;
@@ -200,11 +235,16 @@ function useProfessorSpeech() {
       audioRef.current.onended = null;
       audioRef.current.onerror = null;
       audioRef.current.pause();
+      audioRef.current.remove();
     }
     setPlaying(false);
     setPaused(false);
     setRequesting(true);
     const audio = new Audio();
+    // Keep the active media element inspectable without displaying native controls.
+    audio.dataset.professorAudio = channel;
+    audio.hidden = true;
+    document.body.appendChild(audio);
     const voice = preferencesRef.current.voice;
     audioVoiceRef.current = voice;
     audio.defaultPlaybackRate = preferencesRef.current.speed;
@@ -251,7 +291,12 @@ function useProfessorSpeech() {
         const playback = audio.play().then(() => {
           if (sequence === requestSequence.current) {
             setRequesting(false);
-            setPlaying(true);
+            if (dialogueHeld.current) {
+              resumeAfterDialogue.current = true;
+              audio.pause();
+              setPaused(true);
+              setPlaying(false);
+            } else setPlaying(true);
           }
         }).catch(setFailure);
         const response = await fetch(`${basePath}/api/voice/speech`, {
@@ -303,7 +348,12 @@ function useProfessorSpeech() {
         audio.onerror = setFailure;
         await audio.play();
         setRequesting(false);
-        setPlaying(true);
+        if (dialogueHeld.current) {
+          resumeAfterDialogue.current = true;
+          audio.pause();
+          setPaused(true);
+          setPlaying(false);
+        } else setPlaying(true);
       }
       if (sequence !== requestSequence.current) return false;
       return await completed;
@@ -325,18 +375,21 @@ function useProfessorSpeech() {
       void playRef.current(lastTextRef.current);
     }
   }, [preferences.voice]);
-  const stop = useCallback(() => { requestSequence.current += 1; completionRef.current?.(false); completionRef.current = null; audioRef.current?.pause(); audioRef.current = null; setRequesting(false); setPlaying(false); setPaused(false); }, []);
+  const stop = useCallback(() => { requestSequence.current += 1; completionRef.current?.(false); completionRef.current = null; audioRef.current?.pause(); audioRef.current?.remove(); audioRef.current = null; setRequesting(false); setPlaying(false); setPaused(false); setSpeechError(''); }, []);
   const pause = useCallback(() => { if (audioRef.current) { audioRef.current.pause(); setPaused(true); setPlaying(false); } }, []);
   const resume = useCallback(() => { if (audioRef.current) { void audioRef.current.play().then(() => { setPaused(false); setPlaying(true); }).catch(() => setSpeechError('Professor audio could not resume. Please replay the spoken material.')); } }, []);
   const retry = useCallback(() => {
     if (audioRef.current && !speechError && objectUrlRef.current) {
       audioRef.current.currentTime = 0;
-      void audioRef.current.play().then(() => { setPlaying(true); setPaused(false); }).catch(() => {
+      void audioRef.current.play().then(() => {
+        if (dialogueHeld.current) { audioRef.current?.pause(); resumeAfterDialogue.current = true; setPaused(true); }
+        else { setPlaying(true); setPaused(false); }
+      }).catch(() => {
         if (lastTextRef.current) void play(lastTextRef.current);
       });
     } else if (lastTextRef.current) void play(lastTextRef.current);
   }, [play, speechError]);
-  useEffect(() => () => { audioRef.current?.pause(); if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); }, []);
+  useEffect(() => () => { audioRef.current?.pause(); audioRef.current?.remove(); if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); }, []);
   return { play, stop, pause, resume, retry, hasSpeech: !!lastTextRef.current, speaking: speak.isPending || requesting || playing, paused, speechError };
 }
 
@@ -384,7 +437,7 @@ function useOralRecorder() {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const capture: any = { stream };
+      const capture: any = { stream, turns: new Map<number, string>() };
       captureRef.current = capture;
       const temporary = await getTokenRef.current();
       if (stopRequestedRef.current) {
@@ -397,7 +450,7 @@ function useOralRecorder() {
       const context = new AudioContextConstructor({ sampleRate: 16000 });
       capture.context = context;
       await context.resume();
-      const socket = new WebSocket(`wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${encodeURIComponent(temporary.token)}`);
+      const socket = new WebSocket(`wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&token=${encodeURIComponent(temporary.token)}`);
       capture.socket = socket;
       setTranscript('');
       finalTextRef.current = '';
@@ -409,11 +462,21 @@ function useOralRecorder() {
       socket.onmessage = (message) => {
         try {
           const result = JSON.parse(String(message.data));
-          if (result.message_type === 'PartialTranscript') {
-            setTranscript([finalTextRef.current, result.text].filter(Boolean).join(' ').trim());
-          } else if (result.message_type === 'FinalTranscript' && result.text) {
-            finalTextRef.current = [finalTextRef.current, result.text].filter(Boolean).join(' ').trim();
-            setTranscript(finalTextRef.current);
+          if (result.type === 'Turn') {
+            const ordered = [...capture.turns.entries()].sort(([a], [b]) => a - b).map(([, text]) => text);
+            if (result.end_of_turn && result.turn_is_formatted) {
+              capture.turns.set(result.turn_order, result.transcript || '');
+              finalTextRef.current = [...capture.turns.entries()].sort(([a], [b]) => a - b).map(([, text]) => text).join(' ').trim();
+              setTranscript(finalTextRef.current);
+              if (stopRequestedRef.current && captureRef.current === null) {
+                clearTimeout(capture.finishTimer);
+                socket.send(JSON.stringify({ type: 'Terminate' }));
+                socket.close();
+                setFinalizing(false);
+              }
+            } else if (!result.end_of_turn) {
+              setTranscript([...ordered, result.transcript || ''].filter(Boolean).join(' ').trim());
+            }
           }
         } catch { /* Ignore non-transcript control messages. */ }
       };
@@ -455,7 +518,7 @@ function useOralRecorder() {
       processor.connect(context.destination);
       if (stopRequestedRef.current) {
         releaseCapture(capture);
-        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ terminate_session: true }));
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'Terminate' }));
         captureRef.current = null;
         setRecording(false);
       }
@@ -476,8 +539,11 @@ function useOralRecorder() {
     try {
       if (capture.socket?.readyState === WebSocket.OPEN) {
         setFinalizing(true);
-        capture.socket.send(JSON.stringify({ terminate_session: true }));
-        capture.finishTimer = setTimeout(() => capture.socket?.close(), 1800);
+        capture.socket.send(JSON.stringify({ type: 'ForceEndpoint' }));
+        capture.finishTimer = setTimeout(() => {
+          capture.socket?.close();
+          setFinalizing(false);
+        }, 5000);
       } else {
         setFinalizing(false);
         capture.socket?.close();
@@ -495,6 +561,7 @@ function useOralRecorder() {
 }
 
 function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
+  const { isOpen: dialogueOpen } = useContext(DialogueContext);
   const courseQuery = useGetCourse();
   const progressQuery = useGetProgress();
   const sessionQuery = useGetSessions();
@@ -528,7 +595,12 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
   const spacebarActiveRef = useRef(false);
   const modeLabel = mode === 'dialogue' ? 'Professor dialogue' : mode === 'lecture_questions' ? 'Lecture questions' : 'Final oral exam';
   const readyForAnswer = !submitted && !grade;
-  const canRecordAnswer = readyForAnswer && !recorder.finalizing && !speech.speaking && !speech.paused && !speech.speechError && (recorder.recording || !hasCapturedAnswer || (redoUsed && !recorder.transcript));
+  const canRecordAnswer = !dialogueOpen && readyForAnswer && !recorder.finalizing && !speech.speaking && !speech.paused && !speech.speechError && (recorder.recording || !hasCapturedAnswer || (redoUsed && !recorder.transcript));
+  const stopTestRecording = useRef(recorder.stop);
+  stopTestRecording.current = recorder.stop;
+  useEffect(() => {
+    if (dialogueOpen) stopTestRecording.current();
+  }, [dialogueOpen]);
   const questions = mode === 'lecture_questions'
     ? lecture?.questions ?? []
     : session?.examQuestions ?? course?.finalExam.questions ?? [];
@@ -573,7 +645,7 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== 'Space' || event.repeat || !canRecordAnswer) return;
+      if (dialogueOpen || event.code !== 'Space' || event.repeat || !canRecordAnswer) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName))) return;
       event.preventDefault();
@@ -589,7 +661,7 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
-  }, [recorder.start, recorder.stop, canRecordAnswer]);
+  }, [recorder.start, recorder.stop, canRecordAnswer, dialogueOpen]);
 
   useEffect(() => {
     if (mode === 'lecture_questions' && lecture && questions.length) {
@@ -904,6 +976,134 @@ function Results() {
   </main></div>;
 }
 
+function ProfessorConversationProvider({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<DialogueMessage[]>([]);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const [inputMode, setInputMode] = useState<'speak' | 'write'>('speak');
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [replyPlaying, setReplyPlaying] = useState(false);
+  const busyRef = useRef(false);
+  const pendingVoice = useRef(false);
+  const requestId = useRef(0);
+  const [error, setError] = useState('');
+  const recorder = useOralRecorder();
+  const speech = useProfessorSpeech('dialogue');
+  const ask = useAskProfessor();
+  const askRef = useRef(ask.mutateAsync);
+  askRef.current = ask.mutateAsync;
+  const speechRef = useRef(speech.play);
+  speechRef.current = speech.play;
+
+  const openDialogue = useCallback(() => {
+    if (open) return;
+    window.dispatchEvent(new Event('professor-dialogue-open'));
+    setOpen(true);
+  }, [open]);
+  const closeDialogue = useCallback(() => {
+    pendingVoice.current = false;
+    requestId.current += 1;
+    busyRef.current = false;
+    setBusy(false);
+    setReplyPlaying(false);
+    recorder.stop();
+    speech.stop();
+    setOpen(false);
+    window.dispatchEvent(new Event('professor-dialogue-close'));
+  }, [recorder.stop, speech.stop]);
+  const sendQuestion = useCallback(async (question: string) => {
+    const text = question.trim();
+    if (!text || busyRef.current) return;
+    if (speech.speechError) {
+      setError('Replay the professor’s last spoken reply before continuing.');
+      return;
+    }
+    busyRef.current = true;
+    setBusy(true);
+    setError('');
+    const sequence = ++requestId.current;
+    const history = messagesRef.current.slice(-12).map(({ role, text: content }) => ({
+      role: role === 'student' ? 'user' as const : 'assistant' as const,
+      content,
+    }));
+    try {
+      const reply = await askRef.current({ data: { question: text, history } });
+      if (sequence !== requestId.current) return;
+      setMessages((previous) => [...previous, { role: 'student', text }, { role: 'professor', text: reply.answer }]);
+      setDraft('');
+      setReplyPlaying(true);
+      const heard = await speechRef.current(reply.answer);
+      if (sequence !== requestId.current) return;
+      if (!heard) setError('The professor’s reply was not heard. Use Retry speech to hear it before continuing.');
+    } catch {
+      if (sequence === requestId.current) {
+        setDraft(text);
+        setError('The professor could not answer. Your question is still here; try again.');
+      }
+    } finally {
+      if (sequence === requestId.current) {
+        busyRef.current = false;
+        setBusy(false);
+        setReplyPlaying(false);
+      }
+    }
+  }, [speech.speechError]);
+  const sendRef = useRef(sendQuestion);
+  sendRef.current = sendQuestion;
+  useEffect(() => {
+    if (pendingVoice.current && !recorder.recording && !recorder.finalizing) {
+      pendingVoice.current = false;
+      const question = recorder.transcript.trim();
+      if (question) void sendRef.current(question);
+      else setError(recorder.error || 'I could not hear a question. Please try speaking again or choose Write.');
+    }
+  }, [recorder.recording, recorder.finalizing, recorder.transcript, recorder.error]);
+  const toggleRecording = () => {
+    if (recorder.recording) {
+      pendingVoice.current = true;
+      recorder.stop();
+    } else {
+      setError('');
+      if (!recorder.supported) {
+        setError('This browser cannot use a microphone. Choose Write to ask your question.');
+        return;
+      }
+      void recorder.start();
+    }
+  };
+  const setMode = (mode: 'speak' | 'write') => {
+    if (recorder.recording) {
+      pendingVoice.current = false;
+      if (mode === 'write') setDraft(recorder.transcript);
+      recorder.stop();
+    }
+    setInputMode(mode);
+  };
+  const contextLabel = location.includes('/questions') ? 'Questions in progress · your test stays where you left it' :
+    location.includes('/lecture/') ? 'Lecture in progress · return here after your conversation' :
+    location.includes('/exam') ? 'Final exam in progress · your answers are unaffected' :
+    'Available throughout your course';
+
+  return <DialogueContext.Provider value={{ open: openDialogue, isOpen: open }}>
+    {children}
+    <ProfessorDialoguePanel open={open} messages={messages} inputMode={inputMode} onInputMode={setMode}
+      draft={draft} onDraft={setDraft} transcript={recorder.transcript} recording={recorder.recording}
+      finalizing={recorder.finalizing} busy={busy} speaking={replyPlaying} error={error || recorder.error} onToggleRecording={toggleRecording}
+      onSend={() => void sendQuestion(inputMode === 'write' ? draft : recorder.transcript)}
+      onClose={closeDialogue} contextLabel={contextLabel}
+      audioControls={<ProfessorAudioControls speech={speech} />} />
+  </DialogueContext.Provider>;
+}
+
+function DialogueRoute() {
+  const { open } = useContext(DialogueContext);
+  useEffect(() => { open(); }, []); // Preserve old /dialogue links without taking the student out of the course room.
+  return <CourseHome />;
+}
+
 function OverviewPage() {
   const query = useGetCourse();
   if (query.isLoading) return <Loading />;
@@ -924,7 +1124,7 @@ function Routes() {
     <Route path="/sign-up/*?">{() => <Redirect to="/" />}</Route>
     <Route path="/lecture/:lectureId/questions">{(params) => <OralRoom mode="lecture_questions" lectureId={Number(params.lectureId)} />}</Route>
     <Route path="/lecture/:lectureId">{(params) => <LecturePage lectureId={Number(params.lectureId)} />}</Route>
-    <Route path="/dialogue">{() => <OralRoom mode="dialogue" />}</Route>
+    <Route path="/dialogue" component={DialogueRoute} />
     <Route path="/exam">{() => <OralRoom mode="final_exam" />}</Route>
     <Route path="/results">{() => <Results />}</Route>
     <Route component={NotFound} />
@@ -932,7 +1132,7 @@ function Routes() {
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><WouterRouter base={basePath}><Routes /></WouterRouter></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><WouterRouter base={basePath}><ProfessorConversationProvider><Routes /></ProfessorConversationProvider></WouterRouter></QueryClientProvider>;
 }
 
 export default App;

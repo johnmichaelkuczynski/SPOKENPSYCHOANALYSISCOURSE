@@ -92,7 +92,7 @@ router.post("/professor/dialogue", async (req, res): Promise<void> => {
       {
         role: "system",
         content:
-          "You are a professor teaching Basic Tenets of Psychoanalysis. Answer the student's questions clearly and concisely in spoken style (short paragraphs, no lists or markdown). Ground answers in the course content provided below. You may go beyond it to clarify, but never contradict it. Engage objections seriously. Keep answers under about 150 words unless the student asks for more.\n\n" +
+          "You are a live professor teaching Basic Tenets of Psychoanalysis. This is an ungraded conversation, including when the student interrupts a lecture or an assessment. Answer the student's questions with expertise, clearly and concisely in natural spoken prose (short paragraphs, no lists or markdown). Ground answers in the course material but explore relevant adjacent ideas freely; engage objections and follow-up questions seriously. Treat clinical interpretations as hypotheses, not diagnoses: do not invent trauma or claim that a short anecdote proves repression, motives, or past events. If a question is entirely unrelated to psychoanalysis or the course, gently mention that and offer to return to the class; do not reject relevant or exploratory questions merely because the term is not in the lecture. Do not imply that this conversation earns points or changes the student's assessment. Keep answers under about 150 words unless the student asks for more.\n\n" +
           getInternalCourse().teachingContent,
       },
       ...history,
@@ -253,7 +253,7 @@ router.post("/voice/transcription-token", async (req, res): Promise<void> => {
   }
   if (!authUserId && !allowOneGuestUse(req, res, "transcription-token")) return;
   try {
-    const response = await fetch("https://api.assemblyai.com/v3/realtime/token?expires_in=60", {
+    const response = await fetch("https://streaming.assemblyai.com/v3/token?expires_in_seconds=60", {
       method: "GET",
       headers: { authorization: apiKey },
     });
