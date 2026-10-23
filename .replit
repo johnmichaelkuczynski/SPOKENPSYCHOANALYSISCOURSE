@@ -18,3 +18,9 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"
+OPENAI_MODEL = "gpt-4o-mini"

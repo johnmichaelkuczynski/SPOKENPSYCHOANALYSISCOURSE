@@ -2,7 +2,6 @@ import { Readable } from "node:stream";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { getAuth } from "@clerk/express";
 import { and, eq } from "drizzle-orm";
-import { ReplitConnectors } from "@replit/connectors-sdk";
 import {
   AskProfessorBody,
   AskProfessorResponse,
@@ -283,15 +282,23 @@ router.post("/voice/speech", async (req, res): Promise<void> => {
     return;
   }
   if (!authUserId && !allowOneGuestUse(req, res, "speech")) return;
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    if (!authUserId) finishGuestUse(req, "speech", false);
+    res.status(503).json({ error: "ELEVENLABS_API_KEY is not configured." });
+    return;
+  }
   const voiceId = process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
   try {
-    const connectors = new ReplitConnectors();
-    const upstream = await connectors.proxy(
-      "elevenlabs",
-      `/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream?output_format=mp3_44100_128`,
+    const upstream = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream?output_format=mp3_44100_128`,
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "xi-api-key": apiKey,
+          "content-type": "application/json",
+          accept: "audio/mpeg",
+        },
         body: JSON.stringify({
           text: parsed.data.text,
           model_id: "eleven_multilingual_v2",

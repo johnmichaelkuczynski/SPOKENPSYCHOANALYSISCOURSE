@@ -43,7 +43,7 @@ function parseCourse(source: string): InternalCourse {
 
   const lectureHeaders: { id: number; title: string; line: number }[] = [];
   for (let i = 0; i < lines.length; i += 1) {
-    const match = lines[i]?.match(/^LECTURE (\d+): (.+)$/);
+    const match = lines[i]?.match(/^LECTURE (\d+): (?!ORAL QUESTIONS$)(.+)$/);
     if (match) lectureHeaders.push({ id: Number(match[1]), title: match[2] ?? "", line: i });
   }
 
