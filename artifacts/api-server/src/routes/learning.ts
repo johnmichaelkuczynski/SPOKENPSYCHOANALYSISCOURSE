@@ -47,7 +47,7 @@ async function generateRetakePrompts(): Promise<string[]> {
         {
           role: "system",
           content:
-            "Write five new oral-exam case prompts for a retake in an introductory course on psychoanalysis. Each must be a distinct, plausible clinical vignette and must test the same numbered course criterion as its matching original. Do not copy the original cases. Return JSON only in the shape {\"questions\":[{\"prompt\":\"...\"}, ...]} with exactly five questions. Do not include answers, grading criteria, hints, or explanations in the output.",
+            "Write five new oral-exam case prompts for a retake in an introductory course on psychoanalysis. Each must describe a fresh, distinct, plausible situation and ask the student to adjudicate it: make a judgment, support it with case evidence, and weigh a competing explanation or state what evidence could change the judgment. Test the same numbered course criterion as the matching original. Never ask for a definition, a theorist's name, recalled facts, or the explanation of a case already discussed in the lecture. Do not copy the original exam cases or lecture examples. Return JSON only in the shape {\"questions\":[{\"prompt\":\"...\"}, ...]} with exactly five questions. Do not include answers, grading criteria, hints, or explanations in the output.",
         },
         {
           role: "user",

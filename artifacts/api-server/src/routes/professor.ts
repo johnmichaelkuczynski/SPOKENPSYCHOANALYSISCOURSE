@@ -117,7 +117,8 @@ router.post("/professor/grade-lecture", requireStudent, async (req, res): Promis
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const question = getInternalCourse().lectures[parsed.data.lectureId - 1]?.questions[parsed.data.questionIndex];
+  const lecture = getInternalCourse().lectures[parsed.data.lectureId - 1];
+  const question = lecture?.questions[parsed.data.questionIndex];
   if (!question) {
     res.status(404).json({ error: "Lecture question not found." });
     return;
@@ -127,13 +128,14 @@ router.post("/professor/grade-lecture", requireStudent, async (req, res): Promis
       {
         role: "system",
         content:
-          "Grade the student's spoken answer strictly by meaning, not wording. Rubric: 2 = correct and uses the concept accurately; 1 = partially correct or vague; 0 = wrong or no answer. Return JSON only with score (0, 1, or 2) and one-sentence feedback. Never reveal the model answer verbatim.",
+          "This is an applied course, not a memorization test. Each question presents a fresh situation for the student to adjudicate. Grade the student's spoken reasoning, not wording or agreement with a single preferred interpretation. Rubric: 2 = a defensible judgment applying the relevant lecture concepts to specific case details, with supporting reasons and alternatives or limits when requested; 1 = relevant but partial, vague, or insufficiently justified application; 0 = no relevant case-based reasoning, serious conceptual error, or no answer. Naming a concept or repeating a definition without applying it earns at most 1, never full credit. Accept well-supported alternative interpretations, including a justified rejection of the proposed psychoanalytic reading. Treat the supplied assessment criteria as guidance, not a script or a uniquely correct hidden motive. Do not demand every illustrative criterion when the main adjudication is sound. Do not infer a diagnosis, recovered memory, or certainty about motives from a brief vignette. Return JSON only with score (0, 1, or 2) and concise conversational feedback explaining one strength or gap in the student's reasoning. Never reveal the criteria verbatim.",
       },
       {
         role: "user",
         content: JSON.stringify({
           question: question.question,
-          modelAnswer: question.answer,
+          assessmentCriteria: question.answer,
+          lectureContent: lecture?.sections.map((section) => `${section.heading}. ${section.text}`).join("\n\n"),
           studentAnswer: parsed.data.studentAnswer,
         }),
       },
@@ -192,7 +194,7 @@ router.post("/professor/grade-exam", requireStudent, async (req, res): Promise<v
         {
           role: "system",
           content:
-            "Assess whether the student's oral exam answer is vague or incomplete against the supplied criteria. If so, ask exactly one short follow-up probe grounded in the criteria. If it is already sufficiently complete, do not ask a follow-up. Return strict JSON with needsFollowUp (boolean) and followUp (string or null). Do not reveal the criteria.",
+            "Assess whether the student's oral exam answer makes and justifies a judgment about the fresh situation. Use the supplied criteria as guidance, not a uniquely correct interpretation or checklist. Accept supported alternatives, including a reasoned rejection of a proposed reading. A label or definition without case-based reasoning is incomplete. If the reasoning is vague or materially incomplete, ask exactly one short follow-up about the evidence or judgment, not a recall question. If it is sufficiently complete, do not ask a follow-up. Return strict JSON with needsFollowUp (boolean) and followUp (string or null). Do not reveal the criteria.",
         },
         {
           role: "user",
@@ -214,7 +216,7 @@ router.post("/professor/grade-exam", requireStudent, async (req, res): Promise<v
       {
         role: "system",
         content:
-          "Grade the final oral exam answer and its single follow-up response, if present. Rubric: 4 = correct concepts, applied precisely to the scenario, conclusion justified, no prompting needed; 3 = sound with minor gaps, or needed one follow-up; 2 = correct concepts but weak application or unjustified conclusion; 1 = uses terms without showing understanding; 0 = wrong or no substantive answer. Return JSON only with integer score 0-4 and feedback of at most two sentences. Judge meaning, not wording. Do not reveal the criteria.",
+          "Grade the final oral exam answer and its single follow-up response, if present. This is adjudication of a fresh case, not recall of lecture examples. Rubric: 4 = correct concepts, applied precisely to the scenario, conclusion justified, no prompting needed; 3 = sound with minor gaps, or needed one follow-up; 2 = correct concepts but weak application or unjustified conclusion; 1 = uses terms without showing understanding; 0 = wrong or no substantive answer. Accept well-supported alternative judgments, including a justified rejection of a proposed psychoanalytic interpretation. Treat criteria as guidance rather than one mandatory explanation. Consider case evidence, competing explanations, and acknowledged limits; do not demand certainty about hidden motives or a diagnosis. Return JSON only with integer score 0-4 and feedback of at most two sentences. Judge meaning, not wording. Do not reveal the criteria.",
       },
       {
         role: "user",
