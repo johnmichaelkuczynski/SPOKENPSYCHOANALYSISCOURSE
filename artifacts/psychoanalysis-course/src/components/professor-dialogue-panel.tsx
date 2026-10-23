@@ -1,6 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Loader2, Mic, Send, Square, X } from 'lucide-react';
 
+import { ProfessorPortrait } from './professor-avatars';
+import type { ProfessorVoice } from '../lib/speechPreferences';
+
 export type DialogueMessage = { role: 'student' | 'professor'; text: string };
 
 export type ProfessorDialoguePanelProps = {
@@ -22,6 +25,7 @@ export type ProfessorDialoguePanelProps = {
   onClose: () => void;
   audioControls: ReactNode;
   contextLabel: string;
+  voice: ProfessorVoice;
 };
 
 const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -29,7 +33,7 @@ const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), select:not(
 export default function ProfessorDialoguePanel(props: ProfessorDialoguePanelProps) {
   const {
     open, messages, inputMode, onInputMode, draft, onDraft, transcript, recording, starting, finalizing, busy, speaking,
-    error, onToggleRecording, onSend, onClose, audioControls, contextLabel,
+    error, onToggleRecording, onSend, onClose, audioControls, contextLabel, voice,
   } = props;
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -68,8 +72,10 @@ export default function ProfessorDialoguePanel(props: ProfessorDialoguePanelProp
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="professor-dialogue-title" data-testid="professor-dialogue-panel"
       className="fade-in flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-[#ded9ce] bg-[#faf8f2] text-[#273b38] shadow-xl sm:max-w-[680px] sm:rounded-2xl">
       <div className="flex items-start justify-between gap-4 border-b border-[#e5e0d5] px-5 py-4">
-        <div className="min-w-0">
+        <ProfessorPortrait voice={voice} className="h-14 w-14 shrink-0 border border-[#d6d9d0]" />
+        <div className="min-w-0 flex-1">
           <p className="eyebrow text-[#58756b]">Ask the professor</p>
+          <p className="mt-0.5 text-sm font-bold" data-testid="text-dialogue-professor-identity">{voice === 'female' ? 'Female professor' : 'Male professor'}</p>
           <h2 id="professor-dialogue-title" className="serif mt-1 text-xl leading-tight">A conversation</h2>
           <p className="mt-1 text-xs text-[#697873]" data-testid="text-dialogue-context">{contextLabel}</p>
           <p className="mode-chip mt-2 !px-2.5 !py-1" data-testid="text-dialogue-not-graded">Not graded · No effect on your score</p>
@@ -84,7 +90,7 @@ export default function ProfessorDialoguePanel(props: ProfessorDialoguePanelProp
 
       <div ref={logRef} role="log" aria-live="polite" aria-label="Conversation transcript" data-testid="log-professor-dialogue"
         className="min-h-[140px] flex-1 space-y-4 overflow-y-auto px-5 py-4">
-        {messages.length === 0 && !busy && <p className="serif text-[17px] leading-relaxed text-[#697873]">Ask anything about what you just studied. The professor answers aloud, and the written transcript stays here.</p>}
+        {messages.length === 0 && !busy && <p className="serif text-[17px] leading-relaxed text-[#697873]">Ask about the course, challenge an interpretation, or explore a speculative idea. The professor answers aloud, and the written transcript stays here.</p>}
         {messages.map((m, i) => <div key={i} className={m.role === 'student' ? 'flex justify-end' : 'flex justify-start'} data-testid={`message-dialogue-${i}`}>
           <div className={m.role === 'student' ? 'max-w-[88%] rounded-2xl rounded-br-sm bg-[#e3ece6] px-4 py-3' : 'max-w-[92%] rounded-2xl rounded-bl-sm border border-[#e5e0d5] bg-[#fffdf8] px-4 py-3'}>
             <p className="eyebrow mb-1 text-[#77817b]">{m.role === 'student' ? 'You' : 'Professor'}</p>

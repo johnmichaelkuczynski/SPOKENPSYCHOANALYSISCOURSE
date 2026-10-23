@@ -8,3 +8,9 @@ The professor must be available at any time, including during lectures and asses
 **Why:** The user emphasized that dialogue with the professor is an extremely important feature and explicitly required both spoken and written questions without affecting scores.
 
 **How to apply:** Keep conversation separate from scored assessment responses; do not make a student leave or lose their place in an ongoing lecture or test. Preserve mandatory ElevenLabs speech for every professor reply.
+
+Provide two human-face avatars at the top right: male with a male voice and female with a female voice. Both provide the same course-informed conversational capability. Their primary function is discussion of course material, but they must also engage in speculation.
+
+**Why:** The user explicitly requested both avatars and emphasized that they function the same apart from their voices and will engage in speculation.
+
+**How to apply:** Avatar selection opens the existing spoken/written professor conversation using the matching voice. Do not restrict intellectual exploration to the syllabus; distinguish speculative hypotheses from established claims rather than refusing them.

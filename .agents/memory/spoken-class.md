@@ -16,3 +16,9 @@ Microphones must be on/off toggles: click once to start and click again to stop.
 **Why:** The user explicitly rejected hold-to-record: “IT SHOULD ON OR OFF. PERIOD.”
 
 **How to apply:** Use the same toggle behavior throughout assessments and professor dialogue. Releasing a pointer or key must not stop recording.
+
+Students must be able to hear their own recorded assessment answer.
+
+**Why:** The user explicitly requested, “LET THE USER HEAR HIS OWN RECORDED ANSWER.”
+
+**How to apply:** Provide playback of the student's actual microphone recording, not synthesized speech from its transcript. Keep playback separate from submitting or grading the answer.

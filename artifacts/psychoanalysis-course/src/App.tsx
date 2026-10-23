@@ -9,12 +9,16 @@ import {
 } from '@workspace/api-client-react';
 import type { ActivityFeed, Course, Lecture, OralSession, Progress } from '@workspace/api-client-react';
 import NotFound from '@/pages/not-found';
-import { updateSpeechPreferences, useSpeechPreferences } from '@/lib/speechPreferences';
+import { updateSpeechPreferences, useSpeechPreferences, type ProfessorVoice } from '@/lib/speechPreferences';
+import ProfessorAvatars from '@/components/professor-avatars';
 import ProfessorDialoguePanel, { type DialogueMessage } from '@/components/professor-dialogue-panel';
+import RecordedAnswerPlayback from '@/components/recorded-answer-playback';
+import { encodeRecordedAnswer } from '@/lib/recorded-audio';
+import { closeCaptureAudioContext } from '@/lib/audio-context-cleanup';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-const DialogueContext = createContext({ open: () => {}, isOpen: false });
+const DialogueContext = createContext<{ open: (voice?: ProfessorVoice) => void; isOpen: boolean }>({ open: () => {}, isOpen: false });
 
 function Brand() {
   return <Link href="/" className="brand-mark" data-testid="link-home-brand">
@@ -26,10 +30,10 @@ function Brand() {
 function Header(_props: { signedIn?: boolean }) {
   const preferences = useSpeechPreferences();
   const dialogue = useContext(DialogueContext);
-  return <header className="topbar !h-auto min-h-[72px] !flex-wrap gap-3 py-3">
+  return <header className="topbar !h-auto min-h-[72px] !flex-wrap gap-3 !py-3">
     <Brand />
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#58756b]">
-      <button type="button" onClick={dialogue.open} className="quiet-link inline-flex items-center gap-1.5"
+    <div className="order-3 w-full md:order-2 md:w-auto md:flex-1 ml-auto flex flex-wrap justify-end items-center gap-x-5 gap-y-2 text-xs text-[#58756b]">
+      <button type="button" onClick={() => dialogue.open()} className="quiet-link inline-flex items-center gap-1.5"
         data-testid="button-open-professor-dialogue" aria-haspopup="dialog"><CircleHelp size={15} /> Ask the professor</button>
       <label className="inline-flex items-center gap-2">Professor voice
         <select aria-label="Professor voice" data-testid="select-professor-voice" value={preferences.voice}
@@ -45,6 +49,7 @@ function Header(_props: { signedIn?: boolean }) {
         <output className="w-10 tabular-nums">{preferences.speed.toFixed(2)}×</output>
       </label>
     </div>
+    <div className="order-2 md:order-3 ml-auto shrink-0"><ProfessorAvatars voice={preferences.voice} onChoose={(voice) => dialogue.open(voice)} /></div>
   </header>;
 }
 
@@ -138,7 +143,7 @@ function Portal({ course }: { course: Course }) {
       <div className="flex flex-wrap items-end justify-between gap-5 mb-11">
         <div><p className="eyebrow text-[#58756b] mb-3">Your course room</p><h1 className="serif text-4xl md:text-5xl text-[#263b38]">Welcome, {progress.displayName}</h1></div>
         <div className="flex gap-3">
-          <button type="button" onClick={professorDialogue.open} className="secondary-action" data-testid="link-dialogue"><CircleHelp size={16} /> Ask the professor</button>
+          <button type="button" onClick={() => professorDialogue.open()} className="secondary-action" data-testid="link-dialogue"><CircleHelp size={16} /> Ask the professor</button>
           <Link href="/results" className="secondary-action" data-testid="link-results">Results <ArrowRight size={15} /></Link>
         </div>
       </div>
@@ -419,18 +424,41 @@ function useOralRecorder() {
   const [starting, setStarting] = useState(false);
   const [recording, setRecording] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
-  const [transcript, setTranscript] = useState('');
+  const [transcript, setTranscriptState] = useState('');
+  const [recordingUrl, setRecordingUrl] = useState('');
+  const recordingUrlRef = useRef('');
+  const resetRecording = useCallback(() => {
+    if (recordingUrlRef.current) URL.revokeObjectURL(recordingUrlRef.current);
+    recordingUrlRef.current = '';
+    setRecordingUrl('');
+  }, []);
+  const setTranscript = useCallback((text: string) => {
+    setTranscriptState(text);
+    if (!text) resetRecording();
+  }, [resetRecording]);
   const [error, setError] = useState('');
   const stopRequestedRef = useRef(false);
   const canRecognize = typeof window !== 'undefined' && typeof WebSocket !== 'undefined' &&
     !!navigator.mediaDevices?.getUserMedia && ('AudioContext' in window || 'webkitAudioContext' in window);
-  const releaseCapture = useCallback((capture: any) => {
+  const releaseCapture = useCallback((capture: any, saveRecording = true) => {
     if (!capture) return;
     if (capture.finishTimer) clearTimeout(capture.finishTimer);
     try { capture.processor?.disconnect(); } catch { /* Processor already disconnected. */ }
     try { capture.source?.disconnect(); } catch { /* Source already disconnected. */ }
+    if (saveRecording && capture.samples?.length && !capture.recordingSaved) {
+      capture.recordingSaved = true;
+      try {
+        const audio = new Blob([encodeRecordedAnswer(capture.samples)], { type: 'audio/wav' });
+        if (recordingUrlRef.current) URL.revokeObjectURL(recordingUrlRef.current);
+        recordingUrlRef.current = URL.createObjectURL(audio);
+        setRecordingUrl(recordingUrlRef.current);
+      } catch {
+        setError('Your answer could not be prepared for playback. Your transcript is still available.');
+      }
+    }
+    if (capture.samples) capture.samples = [];
     capture.stream?.getTracks().forEach((track: MediaStreamTrack) => track.stop());
-    try { void capture.context?.close(); } catch { /* Context already closed. */ }
+    void closeCaptureAudioContext(capture);
   }, []);
   const start = useCallback(async () => {
     if (startingRef.current || captureRef.current) return;
@@ -447,7 +475,7 @@ function useOralRecorder() {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const capture: any = { stream, turns: new Map<number, string>() };
+      const capture: any = { stream, turns: new Map<number, string>(), samples: [] as Int16Array[] };
       captureRef.current = capture;
       if (stopRequestedRef.current) {
         releaseCapture(capture);
@@ -533,6 +561,7 @@ function useOralRecorder() {
           const sample = Math.max(-1, Math.min(1, input[Math.floor(i * ratio)]));
           output[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
         }
+        capture.samples.push(output);
         socket.send(output.buffer);
       };
       source.connect(processor);
@@ -581,10 +610,11 @@ function useOralRecorder() {
   }, [releaseCapture]);
   useEffect(() => () => {
     const capture = captureRef.current;
-    releaseCapture(capture);
+    releaseCapture(capture, false);
     try { capture?.socket?.close(); } catch { /* Socket already ended. */ }
+    if (recordingUrlRef.current) URL.revokeObjectURL(recordingUrlRef.current);
   }, [releaseCapture]);
-  return { start, stop, starting, recording, finalizing, transcript, setTranscript, error, setError, supported: canRecognize };
+  return { start, stop, starting, recording, finalizing, transcript, setTranscript, recordingUrl, error, setError, supported: canRecognize };
 }
 
 function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
@@ -884,6 +914,7 @@ function RecorderPanel({ recorder, canAnswer, canRecord = canAnswer, busy, onTog
       </div>}
       {busy && <span className="text-sm text-[#6c7d74]">Working…</span>}
     </div>
+    {!recorder.recording && recorder.recordingUrl && <RecordedAnswerPlayback url={recorder.recordingUrl} />}
     <p className="mt-5 pt-4 border-t border-[#e7e3d9] text-[11px] text-[#899087]">Oral response only · One re-record is allowed before submission.</p>
   </div>;
 }
@@ -992,6 +1023,7 @@ function Results() {
 
 function ProfessorConversationProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const { voice } = useSpeechPreferences();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<DialogueMessage[]>([]);
   const messagesRef = useRef(messages);
@@ -1012,7 +1044,8 @@ function ProfessorConversationProvider({ children }: { children: ReactNode }) {
   const speechRef = useRef(speech.play);
   speechRef.current = speech.play;
 
-  const openDialogue = useCallback(() => {
+  const openDialogue = useCallback((selectedVoice?: ProfessorVoice) => {
+    if (selectedVoice) updateSpeechPreferences({ voice: selectedVoice });
     if (open) return;
     window.dispatchEvent(new Event('professor-dialogue-open'));
     setOpen(true);
@@ -1103,7 +1136,7 @@ function ProfessorConversationProvider({ children }: { children: ReactNode }) {
 
   return <DialogueContext.Provider value={{ open: openDialogue, isOpen: open }}>
     {children}
-    <ProfessorDialoguePanel open={open} messages={messages} inputMode={inputMode} onInputMode={setMode}
+    <ProfessorDialoguePanel open={open} voice={voice} messages={messages} inputMode={inputMode} onInputMode={setMode}
       draft={draft} onDraft={setDraft} transcript={recorder.transcript} recording={recorder.recording}
       starting={recorder.starting} finalizing={recorder.finalizing} busy={busy} speaking={replyPlaying} error={error || recorder.error} onToggleRecording={toggleRecording}
       onSend={() => void sendQuestion(inputMode === 'write' ? draft : recorder.transcript)}
