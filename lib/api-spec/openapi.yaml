@@ -483,4 +483,8 @@ components:
       type: object
       properties:
         text: { type: string, minLength: 1 }
+        voice:
+          type: string
+          enum: [male, female]
+          default: male
       required: [text]

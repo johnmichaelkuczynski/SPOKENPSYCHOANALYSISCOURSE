@@ -40,6 +40,7 @@ export * from './scoreKind';
 export * from './sessionInput';
 export * from './sessionInputMode';
 export * from './speechInput';
+export * from './speechInputVoice';
 export * from './temporaryToken';
 export * from './transcript';
 export * from './transcriptInput';

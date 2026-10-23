@@ -329,8 +329,17 @@ export interface TemporaryToken {
   expiresAt: string;
 }
 
+export type SpeechInputVoice = typeof SpeechInputVoice[keyof typeof SpeechInputVoice];
+
+
+export const SpeechInputVoice = {
+  male: 'male',
+  female: 'female',
+} as const;
+
 export interface SpeechInput {
   /** @minLength 1 */
   text: string;
+  voice?: SpeechInputVoice;
 }
 

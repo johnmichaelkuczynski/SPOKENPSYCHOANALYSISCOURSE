@@ -327,10 +327,11 @@ export const GetTranscriptionTokenResponse = zod.object({
  * @summary Stream professor speech audio for the provided text
  */
 
-
+export const speakTextBodyVoiceDefault = `male`;
 
 export const SpeakTextBody = zod.object({
-  "text": zod.string().min(1)
+  "text": zod.string().min(1),
+  "voice": zod.enum(['male', 'female']).default(speakTextBodyVoiceDefault)
 })
 
 export const SpeakTextResponse = zod.unknown()

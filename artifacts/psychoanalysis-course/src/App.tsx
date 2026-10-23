@@ -9,6 +9,7 @@ import {
 } from '@workspace/api-client-react';
 import type { ActivityFeed, Course, Lecture, OralSession, Progress } from '@workspace/api-client-react';
 import NotFound from '@/pages/not-found';
+import { updateSpeechPreferences, useSpeechPreferences } from '@/lib/speechPreferences';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -21,8 +22,24 @@ function Brand() {
 }
 
 function Header(_props: { signedIn?: boolean }) {
-  return <header className="topbar">
+  const preferences = useSpeechPreferences();
+  return <header className="topbar !h-auto min-h-[72px] !flex-wrap gap-3 py-3">
     <Brand />
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#58756b]">
+      <label className="inline-flex items-center gap-2">Professor voice
+        <select aria-label="Professor voice" data-testid="select-professor-voice" value={preferences.voice}
+          onChange={(event) => updateSpeechPreferences({ voice: event.target.value === 'female' ? 'female' : 'male' })}
+          className="rounded-lg border border-[#ded9ce] bg-transparent px-2 py-1.5 text-[#273b38]">
+          <option value="male">Male</option><option value="female">Female</option>
+        </select>
+      </label>
+      <label className="inline-flex items-center gap-2">Lecture speed
+        <input type="range" aria-label="Lecture speed" data-testid="input-lecture-speed" min="0.5" max="2" step="0.05"
+          value={preferences.speed} onChange={(event) => updateSpeechPreferences({ speed: Number(event.target.value) })}
+          className="w-24 accent-[#315e53]" />
+        <output className="w-10 tabular-nums">{preferences.speed.toFixed(2)}×</output>
+      </label>
+    </div>
   </header>;
 }
 
@@ -160,6 +177,10 @@ function Portal({ course }: { course: Course }) {
 
 function useProfessorSpeech() {
   const speak = useSpeakText();
+  const preferences = useSpeechPreferences();
+  const preferencesRef = useRef(preferences);
+  preferencesRef.current = preferences;
+  const audioVoiceRef = useRef(preferences.voice);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const requestSequence = useRef(0);
@@ -175,11 +196,20 @@ function useProfessorSpeech() {
     setSpeechError('');
     completionRef.current?.(false);
     completionRef.current = null;
-    audioRef.current?.pause();
+    if (audioRef.current) {
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
+      audioRef.current.pause();
+    }
     setPlaying(false);
     setPaused(false);
     setRequesting(true);
     const audio = new Audio();
+    const voice = preferencesRef.current.voice;
+    audioVoiceRef.current = voice;
+    audio.defaultPlaybackRate = preferencesRef.current.speed;
+    audio.playbackRate = preferencesRef.current.speed;
+    audio.preservesPitch = true;
     audioRef.current = audio;
     let finish: ((played: boolean) => void) | null = null;
     const completed = new Promise<boolean>((resolve) => { finish = resolve; });
@@ -228,7 +258,7 @@ function useProfessorSpeech() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, voice }),
         });
         if (!response.ok || !response.body) throw new Error('Audio stream unavailable.');
         await open;
@@ -257,7 +287,7 @@ function useProfessorSpeech() {
         if (mediaSource.readyState === 'open') mediaSource.endOfStream();
         await playback;
       } else {
-        const blob = await speak.mutateAsync({ data: { text } });
+        const blob = await speak.mutateAsync({ data: { text, voice } });
         if (sequence !== requestSequence.current) return false;
         const url = URL.createObjectURL(blob);
         objectUrlRef.current = url;
@@ -282,6 +312,19 @@ function useProfessorSpeech() {
       return false;
     }
   }, [speak]);
+  const playRef = useRef(play);
+  playRef.current = play;
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.defaultPlaybackRate = preferences.speed;
+      audioRef.current.playbackRate = preferences.speed;
+    }
+  }, [preferences.speed]);
+  useEffect(() => {
+    if (audioVoiceRef.current !== preferences.voice && lastTextRef.current && audioRef.current) {
+      void playRef.current(lastTextRef.current);
+    }
+  }, [preferences.voice]);
   const stop = useCallback(() => { requestSequence.current += 1; completionRef.current?.(false); completionRef.current = null; audioRef.current?.pause(); audioRef.current = null; setRequesting(false); setPlaying(false); setPaused(false); }, []);
   const pause = useCallback(() => { if (audioRef.current) { audioRef.current.pause(); setPaused(true); setPlaying(false); } }, []);
   const resume = useCallback(() => { if (audioRef.current) { void audioRef.current.play().then(() => { setPaused(false); setPlaying(true); }).catch(() => setSpeechError('Professor audio could not resume. Please replay the spoken material.')); } }, []);

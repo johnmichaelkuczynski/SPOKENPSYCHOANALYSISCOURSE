@@ -16,7 +16,7 @@ import { getInternalCourse } from "../lib/courseContent";
 import { getEffectiveUserId, getStudentId, requireStudent } from "../middlewares/requireStudent";
 
 const router: IRouter = Router();
-let openingPreviewAudio: Buffer | undefined;
+const openingPreviewAudio = new Map<string, Buffer>();
 const guestUse = new Map<string, number>();
 const guestPending = new Set<string>();
 const guestIntervalMs = 24 * 60 * 60 * 1000;
@@ -283,10 +283,14 @@ router.post("/voice/speech", async (req, res): Promise<void> => {
   const opening = getInternalCourse().lectures[0]?.sections[0];
   const isOpeningPreview = Boolean(opening && parsed.data.text.trim() === `${opening.heading}. ${opening.text}`);
   const limitedGuest = !authUserId && !isOpeningPreview;
-  if (isOpeningPreview && openingPreviewAudio) {
+  const voiceId = parsed.data.voice === "female"
+    ? process.env.ELEVENLABS_FEMALE_VOICE_ID || "EXAVITQu4vr4xnSDxMaL"
+    : process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
+  const cachedPreview = openingPreviewAudio.get(voiceId);
+  if (isOpeningPreview && cachedPreview) {
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
-    res.send(openingPreviewAudio);
+    res.send(cachedPreview);
     return;
   }
   if (limitedGuest && !allowOneGuestUse(req, res, "speech")) return;
@@ -296,7 +300,6 @@ router.post("/voice/speech", async (req, res): Promise<void> => {
     res.status(503).json({ error: "ELEVENLABS_API_KEY is not configured." });
     return;
   }
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
   try {
     const upstream = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream?output_format=mp3_44100_128`,
@@ -327,7 +330,7 @@ router.post("/voice/speech", async (req, res): Promise<void> => {
     if (isOpeningPreview) {
       const chunks: Buffer[] = [];
       audioStream.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
-      audioStream.on("end", () => { openingPreviewAudio = Buffer.concat(chunks); });
+      audioStream.on("end", () => { openingPreviewAudio.set(voiceId, Buffer.concat(chunks)); });
     }
     audioStream.on("error", () => res.destroy());
     audioStream.pipe(res);
