@@ -252,6 +252,15 @@ export interface ScoreInput {
   studentAnswer: string;
 }
 
+export type DialogueInputPersona = typeof DialogueInputPersona[keyof typeof DialogueInputPersona];
+
+
+export const DialogueInputPersona = {
+  professor: 'professor',
+  freud: 'freud',
+  kernberg: 'kernberg',
+} as const;
+
 export type DialogueInputHistoryItemRole = typeof DialogueInputHistoryItemRole[keyof typeof DialogueInputHistoryItemRole];
 
 
@@ -266,6 +275,7 @@ export type DialogueInputHistoryItem = {
 };
 
 export interface DialogueInput {
+  persona?: DialogueInputPersona;
   /** @minLength 1 */
   question: string;
   history: DialogueInputHistoryItem[];
@@ -337,9 +347,19 @@ export const SpeechInputVoice = {
   female: 'female',
 } as const;
 
+export type SpeechInputPersona = typeof SpeechInputPersona[keyof typeof SpeechInputPersona];
+
+
+export const SpeechInputPersona = {
+  professor: 'professor',
+  freud: 'freud',
+  kernberg: 'kernberg',
+} as const;
+
 export interface SpeechInput {
   /** @minLength 1 */
   text: string;
   voice?: SpeechInputVoice;
+  persona?: SpeechInputPersona;
 }
 

@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DialogueInputHistoryItem } from './dialogueInputHistoryItem';
+import type { DialogueInputPersona } from './dialogueInputPersona';
 
 export interface DialogueInput {
+  persona?: DialogueInputPersona;
   /** @minLength 1 */
   question: string;
   history: DialogueInputHistoryItem[];

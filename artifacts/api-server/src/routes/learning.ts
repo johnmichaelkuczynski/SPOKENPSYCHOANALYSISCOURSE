@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import {
   CreateSessionBody,
@@ -27,6 +28,7 @@ import {
 } from "@workspace/db";
 import { getPublicCourse, getInternalCourse } from "../lib/courseContent";
 import { getStudentId, requireStudent } from "../middlewares/requireStudent";
+import { selectCourseRun } from "../middlewares/browserProgress";
 
 const router: IRouter = Router();
 
@@ -112,6 +114,19 @@ router.get("/course", (_req, res): void => {
 });
 
 router.use(requireStudent);
+
+router.post("/course/restart", requireStudent, async (_req, res): Promise<void> => {
+  const baseStudentId = res.locals.baseStudentId;
+  if (typeof baseStudentId !== "string") {
+    res.status(503).json({ error: "Your course could not be restarted. Please try again." });
+    return;
+  }
+  const runId = randomUUID();
+  // Initialize before selecting the run, so failures leave the current run intact.
+  await ensureStudent(`${baseStudentId}_run_${runId}`);
+  selectCourseRun(res, runId);
+  res.sendStatus(204);
+});
 
 router.get("/progress", async (_req, res): Promise<void> => {
   const studentId = getStudentId(res);

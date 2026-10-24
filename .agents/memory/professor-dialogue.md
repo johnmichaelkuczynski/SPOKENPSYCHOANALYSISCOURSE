@@ -14,3 +14,9 @@ Provide two human-face avatars at the top right: male with a male voice and fema
 **Why:** The user explicitly requested both avatars and emphasized that they function the same apart from their voices and will engage in speculation.
 
 **How to apply:** Avatar selection opens the existing spoken/written professor conversation using the matching voice. Do not restrict intellectual exploration to the syllabus; distinguish speculative hypotheses from established claims rather than refusing them.
+
+Name the two original avatars “Dr. Male” and “Dr. Female.”
+
+**Why:** The user explicitly requested these names instead of “Male” and “Female.”
+
+**How to apply:** Use these names in avatar labels and conversation identities; do not change their voices or behavior as part of naming changes.

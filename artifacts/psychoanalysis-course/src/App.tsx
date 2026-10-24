@@ -5,7 +5,7 @@ import { Link, Redirect, Route, Switch, Router as WouterRouter, useLocation } fr
 import {
   useAskProfessor, useCreateSession, useGetActivity, useGetCourse, useGetProgress,
   useGetSessions, useGetTranscriptionToken, useGradeExamAnswer, useGradeLectureAnswer,
-  useSaveScore, useSaveTranscript, useSpeakText, useUpdateLectureProgress
+  useSaveScore, useSaveTranscript, useSpeakText, useUpdateLectureProgress, useRestartCourse
 } from '@workspace/api-client-react';
 import type { ActivityFeed, Course, Lecture, OralSession, Progress } from '@workspace/api-client-react';
 import NotFound from '@/pages/not-found';
@@ -15,16 +15,39 @@ import ProfessorDialoguePanel, { type DialogueMessage } from '@/components/profe
 import RecordedAnswerPlayback from '@/components/recorded-answer-playback';
 import { encodeRecordedAnswer } from '@/lib/recorded-audio';
 import { closeCaptureAudioContext } from '@/lib/audio-context-cleanup';
+import type { ProfessorPersona } from '@/lib/professor-personas';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-const DialogueContext = createContext<{ open: (voice?: ProfessorVoice) => void; isOpen: boolean }>({ open: () => {}, isOpen: false });
+const DialogueContext = createContext<{ open: (voice?: ProfessorVoice, persona?: ProfessorPersona) => void; isOpen: boolean; persona: ProfessorPersona }>({ open: () => {}, isOpen: false, persona: 'professor' });
 
 function Brand() {
   return <Link href="/" className="brand-mark" data-testid="link-home-brand">
     <span className="brand-symbol" aria-hidden="true">∿</span>
     <span><span className="brand-name">Basic Tenets</span><span className="brand-caption block">An oral course</span></span>
   </Link>;
+}
+
+function RestartClassButton() {
+  const restart = useRestartCourse();
+  return <span className="inline-flex flex-col items-end gap-1">
+    <button type="button" className="quiet-link inline-flex items-center gap-1.5"
+      data-testid="button-restart-class" disabled={restart.isPending || restart.isSuccess}
+      title="Start a fresh course run at Lecture 1. Previous records are kept."
+      onClick={() => restart.mutate(undefined, { onSuccess: () => {
+        try {
+          Object.keys(sessionStorage).filter((key) => key.startsWith('basic-tenets-'))
+            .forEach((key) => sessionStorage.removeItem(key));
+        } finally {
+          // Reload also discards recordings, dialogue, and every previous-run query.
+          window.location.assign(`${basePath}/lecture/1`);
+        }
+      } })}>
+      {restart.isPending ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+      {restart.isPending ? 'Restarting…' : 'Restart class'}
+    </button>
+    {restart.isError && <span role="alert" className="text-[#a44d43]">Could not restart. Please try again.</span>}
+  </span>;
 }
 
 function Header(_props: { signedIn?: boolean }) {
@@ -35,6 +58,7 @@ function Header(_props: { signedIn?: boolean }) {
     <div className="order-3 w-full md:order-2 md:w-auto md:flex-1 ml-auto flex flex-wrap justify-end items-center gap-x-5 gap-y-2 text-xs text-[#58756b]">
       <button type="button" onClick={() => dialogue.open()} className="quiet-link inline-flex items-center gap-1.5"
         data-testid="button-open-professor-dialogue" aria-haspopup="dialog"><CircleHelp size={15} /> Ask the professor</button>
+      <RestartClassButton />
       <label className="inline-flex items-center gap-2">Professor voice
         <select aria-label="Professor voice" data-testid="select-professor-voice" value={preferences.voice}
           onChange={(event) => updateSpeechPreferences({ voice: event.target.value === 'female' ? 'female' : 'male' })}
@@ -49,7 +73,7 @@ function Header(_props: { signedIn?: boolean }) {
         <output className="w-10 tabular-nums">{preferences.speed.toFixed(2)}×</output>
       </label>
     </div>
-    <div className="order-2 md:order-3 ml-auto shrink-0"><ProfessorAvatars voice={preferences.voice} onChoose={(voice) => dialogue.open(voice)} /></div>
+    <div className="order-2 md:order-3 ml-auto max-w-full"><ProfessorAvatars voice={preferences.voice} persona={dialogue.persona} onChoose={(voice, persona) => dialogue.open(voice, persona)} /></div>
   </header>;
 }
 
@@ -189,11 +213,13 @@ function Portal({ course }: { course: Course }) {
   </div>;
 }
 
-function useProfessorSpeech(channel: 'course' | 'dialogue' = 'course') {
+function useProfessorSpeech(channel: 'course' | 'dialogue' = 'course', persona: ProfessorPersona = 'professor') {
   const speak = useSpeakText();
   const preferences = useSpeechPreferences();
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
+  const speechPersonaRef = useRef(persona);
+  speechPersonaRef.current = persona;
   const audioVoiceRef = useRef(preferences.voice);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -235,6 +261,7 @@ function useProfessorSpeech(channel: 'course' | 'dialogue' = 'course') {
   }, [channel]);
   const play = useCallback(async (text: string): Promise<boolean> => {
     const sequence = ++requestSequence.current;
+    const speechPersona = speechPersonaRef.current;
     lastTextRef.current = text;
     setSpeechError('');
     completionRef.current?.(false);
@@ -311,7 +338,7 @@ function useProfessorSpeech(channel: 'course' | 'dialogue' = 'course') {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ text, voice }),
+            body: JSON.stringify({ text, voice, persona: speechPersona }),
         });
         if (!response.ok || !response.body) throw new Error('Audio stream unavailable.');
         await open;
@@ -340,7 +367,7 @@ function useProfessorSpeech(channel: 'course' | 'dialogue' = 'course') {
         if (mediaSource.readyState === 'open') mediaSource.endOfStream();
         await playback;
       } else {
-        const blob = await speak.mutateAsync({ data: { text, voice } });
+        const blob = await speak.mutateAsync({ data: { text, voice, persona: speechPersona } });
         if (sequence !== requestSequence.current) return false;
         const url = URL.createObjectURL(blob);
         objectUrlRef.current = url;
@@ -379,11 +406,12 @@ function useProfessorSpeech(channel: 'course' | 'dialogue' = 'course') {
     }
   }, [preferences.speed]);
   useEffect(() => {
-    if (audioVoiceRef.current !== preferences.voice && lastTextRef.current && audioRef.current) {
+    if (persona === 'professor' && audioVoiceRef.current !== preferences.voice && lastTextRef.current && audioRef.current) {
       void playRef.current(lastTextRef.current);
     }
-  }, [preferences.voice]);
+  }, [preferences.voice, persona]);
   const stop = useCallback(() => { requestSequence.current += 1; completionRef.current?.(false); completionRef.current = null; audioRef.current?.pause(); audioRef.current?.remove(); audioRef.current = null; setRequesting(false); setPlaying(false); setPaused(false); setSpeechError(''); }, []);
+  const reset = useCallback((lastText = '', voice?: ProfessorVoice) => { stop(); lastTextRef.current = lastText; audioVoiceRef.current = voice ?? preferencesRef.current.voice; }, [stop]);
   const pause = useCallback(() => { if (audioRef.current) { audioRef.current.pause(); setPaused(true); setPlaying(false); } }, []);
   const resume = useCallback(() => { if (audioRef.current) { void audioRef.current.play().then(() => { setPaused(false); setPlaying(true); }).catch(() => setSpeechError('Professor audio could not resume. Please replay the spoken material.')); } }, []);
   const retry = useCallback(() => {
@@ -398,7 +426,7 @@ function useProfessorSpeech(channel: 'course' | 'dialogue' = 'course') {
     } else if (lastTextRef.current) void play(lastTextRef.current);
   }, [play, speechError]);
   useEffect(() => () => { audioRef.current?.pause(); audioRef.current?.remove(); if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); }, []);
-  return { play, stop, pause, resume, retry, hasSpeech: !!lastTextRef.current, speaking: speak.isPending || requesting || playing, paused, speechError };
+  return { play, stop, reset, pause, resume, retry, hasSpeech: !!lastTextRef.current, speaking: speak.isPending || requesting || playing, paused, speechError };
 }
 
 function ProfessorPreview({ text }: { text: string }) {
@@ -1024,6 +1052,10 @@ function Results() {
 function ProfessorConversationProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { voice } = useSpeechPreferences();
+  const [persona, setPersona] = useState<ProfessorPersona>('professor');
+  const personaRef = useRef<ProfessorPersona>('professor');
+  const conversations = useRef<Record<ProfessorPersona, DialogueMessage[]>>({ professor: [], freud: [], kernberg: [] });
+  const drafts = useRef<Record<ProfessorPersona, string>>({ professor: '', freud: '', kernberg: '' });
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<DialogueMessage[]>([]);
   const messagesRef = useRef(messages);
@@ -1037,19 +1069,37 @@ function ProfessorConversationProvider({ children }: { children: ReactNode }) {
   const requestId = useRef(0);
   const [error, setError] = useState('');
   const recorder = useOralRecorder();
-  const speech = useProfessorSpeech('dialogue');
+  const speech = useProfessorSpeech('dialogue', persona);
   const ask = useAskProfessor();
   const askRef = useRef(ask.mutateAsync);
   askRef.current = ask.mutateAsync;
   const speechRef = useRef(speech.play);
   speechRef.current = speech.play;
 
-  const openDialogue = useCallback((selectedVoice?: ProfessorVoice) => {
+  const openDialogue = useCallback((selectedVoice?: ProfessorVoice, selectedPersona: ProfessorPersona = 'professor') => {
     if (selectedVoice) updateSpeechPreferences({ voice: selectedVoice });
+    if (selectedPersona !== personaRef.current) {
+      conversations.current[personaRef.current] = messagesRef.current;
+      drafts.current[personaRef.current] = draft;
+      pendingVoice.current = false;
+      requestId.current += 1;
+      busyRef.current = false;
+      setBusy(false);
+      setReplyPlaying(false);
+      recorder.stop();
+      recorder.setTranscript('');
+      speech.reset(conversations.current[selectedPersona].at(-1)?.text ?? '', selectedVoice);
+      setMessages(conversations.current[selectedPersona]);
+      messagesRef.current = conversations.current[selectedPersona];
+      setDraft(drafts.current[selectedPersona]);
+      setError('');
+      personaRef.current = selectedPersona;
+      setPersona(selectedPersona);
+    }
     if (open) return;
     window.dispatchEvent(new Event('professor-dialogue-open'));
     setOpen(true);
-  }, [open]);
+  }, [open, draft, recorder.stop, recorder.setTranscript, speech.reset]);
   const closeDialogue = useCallback(() => {
     pendingVoice.current = false;
     requestId.current += 1;
@@ -1077,7 +1127,7 @@ function ProfessorConversationProvider({ children }: { children: ReactNode }) {
       content,
     }));
     try {
-      const reply = await askRef.current({ data: { question: text, history } });
+      const reply = await askRef.current({ data: { question: text, history, persona: personaRef.current } });
       if (sequence !== requestId.current) return;
       setMessages((previous) => [...previous, { role: 'student', text }, { role: 'professor', text: reply.answer }]);
       setDraft('');
@@ -1085,10 +1135,11 @@ function ProfessorConversationProvider({ children }: { children: ReactNode }) {
       const heard = await speechRef.current(reply.answer);
       if (sequence !== requestId.current) return;
       if (!heard) setError('The professor’s reply was not heard. Use Retry speech to hear it before continuing.');
-    } catch {
+    } catch (failure) {
       if (sequence === requestId.current) {
         setDraft(text);
-        setError('The professor could not answer. Your question is still here; try again.');
+        const message = (failure as { data?: { error?: unknown } } | null)?.data?.error;
+        setError(typeof message === 'string' ? message : 'The professor could not answer. Your question is still here; try again.');
       }
     } finally {
       if (sequence === requestId.current) {
@@ -1134,9 +1185,9 @@ function ProfessorConversationProvider({ children }: { children: ReactNode }) {
     location.includes('/exam') ? 'Final exam in progress · your answers are unaffected' :
     'Available throughout your course';
 
-  return <DialogueContext.Provider value={{ open: openDialogue, isOpen: open }}>
+  return <DialogueContext.Provider value={{ open: openDialogue, isOpen: open, persona }}>
     {children}
-    <ProfessorDialoguePanel open={open} voice={voice} messages={messages} inputMode={inputMode} onInputMode={setMode}
+    <ProfessorDialoguePanel open={open} voice={voice} persona={persona} messages={messages} inputMode={inputMode} onInputMode={setMode}
       draft={draft} onDraft={setDraft} transcript={recorder.transcript} recording={recorder.recording}
       starting={recorder.starting} finalizing={recorder.finalizing} busy={busy} speaking={replyPlaying} error={error || recorder.error} onToggleRecording={toggleRecording}
       onSend={() => void sendQuestion(inputMode === 'write' ? draft : recorder.transcript)}

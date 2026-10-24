@@ -40,6 +40,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Course"
+  /course/restart:
+    post:
+      operationId: restartCourse
+      tags: [course]
+      summary: Begin a fresh course run without deleting previous records
+      responses:
+        "204":
+          description: Fresh course run selected for this browser
   /progress:
     get:
       operationId: getProgress
@@ -428,6 +436,9 @@ components:
     DialogueInput:
       type: object
       properties:
+        persona:
+          type: string
+          enum: [professor, freud, kernberg]
         question: { type: string, minLength: 1 }
         history:
           type: array
@@ -487,4 +498,8 @@ components:
           type: string
           enum: [male, female]
           default: male
+        persona:
+          type: string
+          enum: [professor, freud, kernberg]
+          default: professor
       required: [text]

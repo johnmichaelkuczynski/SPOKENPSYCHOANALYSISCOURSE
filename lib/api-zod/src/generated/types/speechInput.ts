@@ -5,10 +5,12 @@
  * Oral course API
  * OpenAPI spec version: 0.1.0
  */
+import type { SpeechInputPersona } from './speechInputPersona';
 import type { SpeechInputVoice } from './speechInputVoice';
 
 export interface SpeechInput {
   /** @minLength 1 */
   text: string;
   voice?: SpeechInputVoice;
+  persona?: SpeechInputPersona;
 }

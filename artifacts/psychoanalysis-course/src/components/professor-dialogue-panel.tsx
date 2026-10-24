@@ -3,6 +3,7 @@ import { Loader2, Mic, Send, Square, X } from 'lucide-react';
 
 import { ProfessorPortrait } from './professor-avatars';
 import type { ProfessorVoice } from '../lib/speechPreferences';
+import type { ProfessorPersona } from '../lib/professor-personas';
 
 export type DialogueMessage = { role: 'student' | 'professor'; text: string };
 
@@ -26,6 +27,7 @@ export type ProfessorDialoguePanelProps = {
   audioControls: ReactNode;
   contextLabel: string;
   voice: ProfessorVoice;
+  persona: ProfessorPersona;
 };
 
 const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -33,8 +35,10 @@ const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), select:not(
 export default function ProfessorDialoguePanel(props: ProfessorDialoguePanelProps) {
   const {
     open, messages, inputMode, onInputMode, draft, onDraft, transcript, recording, starting, finalizing, busy, speaking,
-    error, onToggleRecording, onSend, onClose, audioControls, contextLabel, voice,
+    error, onToggleRecording, onSend, onClose, audioControls, contextLabel, voice, persona,
   } = props;
+  const thinker = persona === 'freud' ? 'Freud' : persona === 'kernberg' ? 'Kernberg' : null;
+  const who = thinker ?? 'The professor';
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -65,17 +69,19 @@ export default function ProfessorDialoguePanel(props: ProfessorDialoguePanelProp
   if (!open) return null;
 
   const locked = busy || finalizing;
-  const status = finalizing ? 'Finishing your transcript' : speaking ? 'The professor is speaking' : busy ? 'The professor is considering your question' : '';
+  const status = finalizing ? 'Finishing your transcript' : speaking ? `${who} is speaking` : busy ? `${who} is considering your question` : '';
 
   return <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" style={{ background: 'rgba(33,48,46,.38)' }}
     onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="professor-dialogue-title" data-testid="professor-dialogue-panel"
       className="fade-in flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-[#ded9ce] bg-[#faf8f2] text-[#273b38] shadow-xl sm:max-w-[680px] sm:rounded-2xl">
       <div className="flex items-start justify-between gap-4 border-b border-[#e5e0d5] px-5 py-4">
-        <ProfessorPortrait voice={voice} className="h-14 w-14 shrink-0 border border-[#d6d9d0]" />
+        <ProfessorPortrait voice={voice} persona={persona} className="h-14 w-14 shrink-0 border border-[#d6d9d0]" />
         <div className="min-w-0 flex-1">
           <p className="eyebrow text-[#58756b]">Ask the professor</p>
-          <p className="mt-0.5 text-sm font-bold" data-testid="text-dialogue-professor-identity">{voice === 'female' ? 'Female professor' : 'Male professor'}</p>
+          <p className="mt-0.5 text-sm font-bold" data-testid="text-dialogue-professor-identity">{thinker ?? (voice === 'female' ? 'Dr. Female' : 'Dr. Male')}</p>
+          {thinker && <p className="text-[11px] leading-snug text-[#697873]" data-testid="text-dialogue-ai-portrayal">AI portrayal · Genius 101. Not the real person speaking or endorsing.</p>}
+          {thinker && <p className="text-[11px] leading-snug text-[#697873]" data-testid="text-thinker-voice">Light Austrian-accented English · ElevenLabs voice</p>}
           <h2 id="professor-dialogue-title" className="serif mt-1 text-xl leading-tight">A conversation</h2>
           <p className="mt-1 text-xs text-[#697873]" data-testid="text-dialogue-context">{contextLabel}</p>
           <p className="mode-chip mt-2 !px-2.5 !py-1" data-testid="text-dialogue-not-graded">Not graded · No effect on your score</p>
@@ -90,7 +96,7 @@ export default function ProfessorDialoguePanel(props: ProfessorDialoguePanelProp
 
       <div ref={logRef} role="log" aria-live="polite" aria-label="Conversation transcript" data-testid="log-professor-dialogue"
         className="min-h-[140px] flex-1 space-y-4 overflow-y-auto px-5 py-4">
-        {messages.length === 0 && !busy && <p className="serif text-[17px] leading-relaxed text-[#697873]">Ask about the course, challenge an interpretation, or explore a speculative idea. The professor answers aloud, and the written transcript stays here.</p>}
+        {messages.length === 0 && !busy && <p className="serif text-[17px] leading-relaxed text-[#697873]">Ask about the course, challenge an interpretation, or explore a speculative idea. {who} answers aloud, and the written transcript stays here.</p>}
         {messages.map((m, i) => <div key={i} className={m.role === 'student' ? 'flex justify-end' : 'flex justify-start'} data-testid={`message-dialogue-${i}`}>
           <div className={m.role === 'student' ? 'max-w-[88%] rounded-2xl rounded-br-sm bg-[#e3ece6] px-4 py-3' : 'max-w-[92%] rounded-2xl rounded-bl-sm border border-[#e5e0d5] bg-[#fffdf8] px-4 py-3'}>
             <p className="eyebrow mb-1 text-[#77817b]">{m.role === 'student' ? 'You' : 'Professor'}</p>
@@ -125,7 +131,7 @@ export default function ProfessorDialoguePanel(props: ProfessorDialoguePanelProp
           <div className="min-w-0 flex-1">
             <p className={`text-sm font-semibold ${recording ? 'status-live' : ''}`}>
               {recording && <span className="meter-dot" aria-hidden="true" />}
-              {recording ? 'Microphone on. Click again to turn it off and send.' : starting ? 'Connecting microphone. Click again to cancel.' : finalizing ? 'Finishing your transcript' : speaking ? 'The professor is speaking' : busy ? 'Waiting for the professor' : 'Microphone off. Click once to turn it on.'}
+              {recording ? 'Microphone on. Click again to turn it off and send.' : starting ? 'Connecting microphone. Click again to cancel.' : finalizing ? 'Finishing your transcript' : speaking ? `${who} is speaking` : busy ? `Waiting for ${thinker ?? 'the professor'}` : 'Microphone off. Click once to turn it on.'}
             </p>
             <p className="serif mt-1 min-h-[1.5em] text-[16px] italic leading-snug text-[#58756b]" aria-live="polite" data-testid="text-live-transcript">
               {transcript || (recording ? 'Your words will appear here.' : 'Stopping the microphone sends your question automatically.')}

@@ -46,6 +46,12 @@ export const GetCourseResponse = zod.object({
 
 
 /**
+ * @summary Begin a fresh course run without deleting previous records
+ */
+export const RestartCourseResponse = zod.void()
+
+
+/**
  * @summary Get the signed-in student's progress and results
  */
 export const GetProgressResponse = zod.object({
@@ -246,6 +252,7 @@ export const SaveScoreResponse = zod.object({
 
 
 export const AskProfessorBody = zod.object({
+  "persona": zod.enum(['professor', 'freud', 'kernberg']).optional(),
   "question": zod.string().min(1),
   "history": zod.array(zod.object({
   "role": zod.enum(['user', 'assistant']),
@@ -328,10 +335,12 @@ export const GetTranscriptionTokenResponse = zod.object({
  */
 
 export const speakTextBodyVoiceDefault = `male`;
+export const speakTextBodyPersonaDefault = `professor`;
 
 export const SpeakTextBody = zod.object({
   "text": zod.string().min(1),
-  "voice": zod.enum(['male', 'female']).default(speakTextBodyVoiceDefault)
+  "voice": zod.enum(['male', 'female']).default(speakTextBodyVoiceDefault),
+  "persona": zod.enum(['professor', 'freud', 'kernberg']).default(speakTextBodyPersonaDefault)
 })
 
 export const SpeakTextResponse = zod.unknown()

@@ -224,6 +224,80 @@ export function useGetCourse<TData = Awaited<ReturnType<typeof getCourse>>, TErr
 
 
 
+export const getRestartCourseUrl = () => {
+
+
+
+
+  return `/api/course/restart`
+}
+
+/**
+ * @summary Begin a fresh course run without deleting previous records
+ */
+export const restartCourse = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getRestartCourseUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestartCourseMutationKey = () => ['restartCourse'] as const;
+
+export const getRestartCourseMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restartCourse>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restartCourse>>, TError,void, TContext> => {
+
+const mutationKey = getRestartCourseMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restartCourse>>, void> = () => {
+
+
+          return  restartCourse(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestartCourseMutationResult = NonNullable<Awaited<ReturnType<typeof restartCourse>>>
+
+    export type RestartCourseMutationError = ErrorType<unknown>
+
+
+    /**
+ * @summary Begin a fresh course run without deleting previous records
+ */
+export const useRestartCourse = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restartCourse>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restartCourse>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRestartCourseMutationOptions(options));
+    }
+
 export const getGetProgressUrl = () => {
 
 

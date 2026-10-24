@@ -13,6 +13,8 @@ import {
 } from "@workspace/api-zod";
 import { db, oralExamScenariosTable, oralSessionsTable } from "@workspace/db";
 import { getInternalCourse } from "../lib/courseContent";
+import { askGeniusThinker } from "../lib/geniusThinkers";
+import { resolveProfessorVoice } from "../lib/professorVoices";
 import { getEffectiveUserId, getStudentId, requireStudent } from "../middlewares/requireStudent";
 
 const router: IRouter = Router();
@@ -88,6 +90,17 @@ router.post("/professor/dialogue", async (req, res): Promise<void> => {
     content: message.content.slice(0, 4000),
   }));
   try {
+    if (parsed.data.persona === "freud" || parsed.data.persona === "kernberg") {
+      const answer = await askGeniusThinker({
+        persona: parsed.data.persona,
+        question: parsed.data.question,
+        history,
+        courseContent: getInternalCourse().teachingContent,
+      });
+      if (!authUserId) finishGuestUse(req, "dialogue", true);
+      res.json(AskProfessorResponse.parse({ answer }));
+      return;
+    }
     const result = await openAiJson<{ answer?: string }>([
       {
         role: "system",
@@ -105,9 +118,12 @@ router.post("/professor/dialogue", async (req, res): Promise<void> => {
     if (!result.answer?.trim()) throw new Error("The AI professor returned no answer.");
     if (!authUserId) finishGuestUse(req, "dialogue", true);
     res.json(AskProfessorResponse.parse({ answer: result.answer.trim() }));
-  } catch {
+  } catch (error) {
     if (!authUserId) finishGuestUse(req, "dialogue", false);
-    providerError(res, "The professor could not respond. Please try again.");
+    if (parsed.data.persona === "freud" || parsed.data.persona === "kernberg") {
+      req.log.warn({ persona: parsed.data.persona, reason: error instanceof Error ? error.message : "Unknown connection error" }, "Genius 101 conversation failed");
+      providerError(res, `${parsed.data.persona === "freud" ? "Freud" : "Kernberg"} could not respond through Genius 101. Your question has been kept; please try again.`);
+    } else providerError(res, "The professor could not respond. Please try again.");
   }
 });
 
@@ -285,9 +301,9 @@ router.post("/voice/speech", async (req, res): Promise<void> => {
   const opening = getInternalCourse().lectures[0]?.sections[0];
   const isOpeningPreview = Boolean(opening && parsed.data.text.trim() === `${opening.heading}. ${opening.text}`);
   const limitedGuest = !authUserId && !isOpeningPreview;
-  const voiceId = parsed.data.voice === "female"
-    ? process.env.ELEVENLABS_FEMALE_VOICE_ID || "EXAVITQu4vr4xnSDxMaL"
-    : process.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
+  const voiceId = resolveProfessorVoice(parsed.data.voice, parsed.data.persona);
+  res.setHeader("X-Professor-Persona", parsed.data.persona);
+  res.setHeader("X-Professor-Voice", voiceId);
   const cachedPreview = openingPreviewAudio.get(voiceId);
   if (isOpeningPreview && cachedPreview) {
     res.setHeader("Content-Type", "audio/mpeg");
