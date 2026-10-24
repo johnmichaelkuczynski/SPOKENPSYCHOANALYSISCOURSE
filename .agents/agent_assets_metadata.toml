@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "emUMqWnZP4ecmlUl4mYri"
+uri = "file://README.md"
+type = "text"
+title = "Basic Tenets of Psychoanalysis — Colorful README"
+description = "Repository README with colorful badges, illustrated section headings, course overview, four professor profiles, features, curriculum, and setup notes."
+logical_id = "d5635c8c-973c-4e4a-bfe7-89e610fb38c7"
+content_hash = "sha256:174852aaf08b437bc2d3f4256c690cb2d504400034aeb0960dd6051776d9dc09"
+size = 9205
+mtime_ms = 1792806793929
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:839b374b-1735-47c5-9933-cfef83423166/d5635c8c-973c-4e4a-bfe7-89e610fb38c7/4beae1dd-f699-4a8b-b816-f6c4ed16acc5"
+storage_version_token = "1792806806691897"
+content_type = "text/markdown"
