@@ -46,6 +46,8 @@ This is **not a text chat with optional audio**. Speech is part of the teaching 
 - **Applied assessment questions** — Each question presents a fresh situation and asks the student to adjudicate it.
 - **Recorded-answer playback** — Listen to your own recorded assessment answer.
 - **Direct assessment access** — Open post-lecture assessments and the final oral exam through dedicated links.
+- **No prerequisite gates** — All five homework assessments and the final oral exam remain available regardless of lecture completion or scores.
+- **Always-visible professor controls** — The four avatars stay in the header while scrolling, including on assessment pages.
 - **Progress and results** — Review course progress and recorded assessment results.
 - **Restart the class** — Begin a fresh course run without deleting earlier work or changing another browser’s progress.
 

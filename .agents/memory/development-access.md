@@ -1,7 +1,13 @@
 ---
 name: Course access
-description: The existing sign-in system must be removed; Google login is deferred.
+description: No login wall or assessment prerequisites; professor avatars stay accessible.
 ---
+
+All homework assessments and the final oral exam must be available at all times, with no prerequisite gateways. All four professor avatars must remain available for spoken discussion on those pages, including while scrolling.
+
+**Why:** The user repeated that every homework and the final exam must always be accessible, and specifically rejected the locked course portal and missing professor icons.
+
+**How to apply:** Do not reintroduce completion/score gates, cooldown-based access restrictions, or assessment-mode dialogue bans. Keep actual grades and past work intact; access is independent of scoring. Preserve the persistent four-avatar header on the course portal and assessment pages.
 
 The user requested removal of the current sign-in system. They said proper Google login will be installed later. Do not reintroduce Clerk or another login system now.
 

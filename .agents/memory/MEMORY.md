@@ -1,6 +1,6 @@
 - [Spoken-class requirement](spoken-class.md) — professor speech is mandatory, and ElevenLabs must use the user's own securely stored API key.
 - [Anonymous preview quotas](preview-quotas.md) — proxied browser and shell requests can share an IP; do not treat that IP as a unique visitor.
-- [Course access](development-access.md) — remove the current login system; keep course access open. Direct Google login is deferred until explicitly requested.
+- [Course access](development-access.md) — no login wall or assessment gates; all four professors remain accessible on every page. Google login is deferred.
 - [Applied assessment](applied-assessment.md) — every test/homework question must present a fresh situation for the student to adjudicate, not recall a lecture case.
 - [Ungraded professor access](professor-dialogue.md) — students must be able to speak or write to the professor at any point; replies are spoken, with no effect on scores.
 - [Restarting class](course-restart.md) — begin a fresh course run without deleting earlier work or changing other browsers' progress.

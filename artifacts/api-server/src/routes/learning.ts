@@ -103,7 +103,7 @@ async function ensureStudent(studentId: string): Promise<void> {
       .values({
         clerkUserId: studentId,
         lectureId: lecture.id,
-        status: lecture.id === 1 ? "available" : "locked",
+        status: "available",
       })
       .onConflictDoNothing();
   }
@@ -167,11 +167,10 @@ router.get("/progress", async (_req, res): Promise<void> => {
   const lectureProgress = getInternalCourse().lectures.map((lecture) => {
     const row = progressRows.find((item) => item.lectureId === lecture.id);
     const total = lectureTotals.get(lecture.id) ?? 0;
-    const unlocked = lecture.id === 1 || (lectureTotals.get(lecture.id - 1) ?? 0) >= 8;
     const passed = total >= 8;
     return {
       lectureId: lecture.id,
-      status: (passed ? "passed" : unlocked ? "available" : "locked") as "locked" | "available" | "passed",
+      status: (passed ? "passed" : "available") as "available" | "passed",
       currentSection: row?.currentSection ?? 0,
       bestScore: total,
       attempts: row?.attempts ?? 0,
@@ -192,13 +191,8 @@ router.get("/progress", async (_req, res): Promise<void> => {
         .reduce((sum, score) => sum + score.score, 0)
     : 0;
   const examComplete = examScores.filter((score) => score.attempt === examAttempt).length >= 5;
-  const examPassed = examComplete && examTotal >= 14;
-  const examUnlocked = lectureProgress.every((item) => item.status === "passed");
-  const failedExamSession = examSessions.find((item) => item.attempt === 1);
-  const examRetakeAt =
-    examAttempt === 1 && examComplete && !examPassed && failedExamSession
-      ? new Date(failedExamSession.startedAt.getTime() + 48 * 60 * 60 * 1000)
-      : null;
+  const examUnlocked = true;
+  const examRetakeAt = null;
   const gradePercent =
     examComplete && lectureProgress.every((item) => item.status === "passed")
       ? (lectureTotal / 60) * 40 + (examTotal / 20) * 60
@@ -282,32 +276,11 @@ router.put("/progress/lectures/:lectureId", async (req, res): Promise<void> => {
     .select()
     .from(lectureProgressTable)
     .where(and(eq(lectureProgressTable.clerkUserId, studentId), eq(lectureProgressTable.lectureId, lectureId)));
-  const unlocked = lectureId === 1;
-  const [previous] = lectureId > 1
-    ? await db
-        .select()
-        .from(lectureProgressTable)
-        .where(and(eq(lectureProgressTable.clerkUserId, studentId), eq(lectureProgressTable.lectureId, lectureId - 1)))
-    : [];
-  const previousScores = await db
-    .select()
-    .from(oralScoresTable)
-    .where(and(eq(oralScoresTable.clerkUserId, studentId), eq(oralScoresTable.kind, "lecture"), eq(oralScoresTable.lectureId, lectureId - 1)));
-  const previousQuestionScores = new Map<number, (typeof previousScores)[number]>();
-  for (const score of previousScores) {
-    const prior = previousQuestionScores.get(score.questionIndex);
-    if (!prior || score.attempt > prior.attempt) previousQuestionScores.set(score.questionIndex, score);
-  }
-  const previousTotal = [...previousQuestionScores.values()].reduce((sum, item) => sum + item.score, 0);
-  if (lectureId > 1 && (!previous || previousTotal < 8)) {
-    res.status(403).json({ error: "Pass the previous lecture's oral questions to unlock this lecture." });
-    return;
-  }
   const alreadyPassed = current?.status === "passed";
   await db
     .update(lectureProgressTable)
     .set({
-      status: alreadyPassed ? "passed" : unlocked || previousTotal >= 8 ? "available" : "locked",
+      status: alreadyPassed ? "passed" : "available",
       currentSection: body.data.currentSection,
       updatedAt: new Date(),
     })
@@ -366,8 +339,7 @@ router.post("/sessions", async (req, res): Promise<void> => {
     try {
       examPrompts = await generateRetakePrompts();
     } catch {
-      res.status(502).json({ error: "New final-exam cases could not be prepared. Please try again." });
-      return;
+      console.warn("New final-exam cases could not be prepared; keeping the exam open with the course's existing cases.");
     }
   }
 
@@ -463,32 +435,6 @@ router.post("/scores", async (req, res): Promise<void> => {
   if (!matchingSession) {
     res.status(404).json({ error: "Matching oral session not found." });
     return;
-  }
-  if (body.data.kind === "lecture" && body.data.lectureId != null && body.data.attempt === 2) {
-    const originals = await db
-      .select()
-      .from(oralScoresTable)
-      .where(and(
-        eq(oralScoresTable.clerkUserId, studentId),
-        eq(oralScoresTable.kind, "lecture"),
-        eq(oralScoresTable.lectureId, body.data.lectureId),
-        eq(oralScoresTable.questionIndex, body.data.questionIndex),
-        eq(oralScoresTable.attempt, 1),
-      ));
-    const retries = await db
-      .select()
-      .from(oralScoresTable)
-      .where(and(
-        eq(oralScoresTable.clerkUserId, studentId),
-        eq(oralScoresTable.kind, "lecture"),
-        eq(oralScoresTable.lectureId, body.data.lectureId),
-        eq(oralScoresTable.questionIndex, body.data.questionIndex),
-        eq(oralScoresTable.attempt, 2),
-      ));
-    if (!originals[0] || originals[0].score >= 2 || retries.length > 0) {
-      res.status(403).json({ error: "Only missed questions may be retried once." });
-      return;
-    }
   }
   const [score] = await db
     .insert(oralScoresTable)

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Headphones, Loader2, LockKeyhole, Mic, RotateCcw, Volume2 } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Headphones, Loader2, Mic, RotateCcw, Volume2 } from 'lucide-react';
 import { Link, Redirect, Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import {
   useAskProfessor, useCreateSession, useGetActivity, useGetCourse, useGetProgress,
@@ -53,7 +53,7 @@ function RestartClassButton() {
 function Header(_props: { signedIn?: boolean }) {
   const preferences = useSpeechPreferences();
   const dialogue = useContext(DialogueContext);
-  return <header className="topbar !h-auto min-h-[72px] !flex-wrap gap-3 !py-3">
+  return <header className="topbar sticky top-0 z-40 !h-auto min-h-[72px] !flex-wrap gap-3 !py-3">
     <Brand />
     <div className="order-3 w-full md:order-2 md:w-auto md:flex-1 ml-auto flex flex-wrap justify-end items-center gap-x-5 gap-y-2 text-xs text-[#58756b]">
       <button type="button" onClick={() => dialogue.open()} className="quiet-link inline-flex items-center gap-1.5"
@@ -182,13 +182,12 @@ function Portal({ course }: { course: Course }) {
           <div className="border-t border-[#dfdbd0]">
             {lectures.map((lecture, i) => {
               const item = progress.lectures.find((p) => p.lectureId === lecture.id);
-              const locked = item?.status === 'locked';
               const passed = item?.status === 'passed';
               return <div key={lecture.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 py-4 border-b border-[#dfdbd0]">
-                <button disabled={locked} onClick={() => setLocation(`/lecture/${lecture.id}`)} className="flex-1 min-w-[240px] text-left grid grid-cols-[40px_1fr_auto] gap-3 items-center py-1 disabled:opacity-50" data-testid={`button-lecture-${lecture.id}`}>
+                <button onClick={() => setLocation(`/lecture/${lecture.id}`)} className="flex-1 min-w-[240px] text-left grid grid-cols-[40px_1fr_auto] gap-3 items-center py-1" data-testid={`button-lecture-${lecture.id}`}>
                 <span className="serif text-xl text-[#8d978f]">{String(i + 1).padStart(2, '0')}</span>
-                <span><span className="block serif text-xl text-[#2d403c]">{lecture.title}</span><span className="block mt-1 text-xs text-[#818980]">{passed ? 'Passed' : locked ? 'Locked' : item?.attempts ? `Attempt ${item.attempts}` : 'Available'}</span></span>
-                {locked ? <LockKeyhole size={16} className="text-[#a0a49b]" /> : passed ? <Check size={18} className="text-[#55766a]" /> : <ArrowRight size={17} className="text-[#55766a]" />}
+                <span><span className="block serif text-xl text-[#2d403c]">{lecture.title}</span><span className="block mt-1 text-xs text-[#818980]">{passed ? 'Passed' : item?.attempts ? `Attempt ${item.attempts}` : 'Available'}</span></span>
+                {passed ? <Check size={18} className="text-[#55766a]" /> : <ArrowRight size={17} className="text-[#55766a]" />}
                 </button>
                 <Link href={`/lecture/${lecture.id}/questions`} className="secondary-action !px-4 !py-2 text-xs" data-testid={`link-assessment-${lecture.id}`}>Post-lecture assessment <ArrowRight size={14} /></Link>
               </div>;
@@ -708,7 +707,6 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
 
   useEffect(() => {
     if (courseQuery.isLoading || !course || sessionQuery.isLoading || sessionQuery.isError || (mode !== 'dialogue' && (progressQuery.isLoading || progressQuery.isError))) return;
-    if (mode === 'dialogue' && sessionStorage.getItem('basic-tenets-active-test')) return;
     if (mode === 'lecture_questions' && !lecture) return;
     if (sessionOpeningFor.current === location) return;
     sessionOpeningFor.current = location;
@@ -756,11 +754,6 @@ function OralRoom({ mode, lectureId }: { mode: OralMode; lectureId?: number }) {
   if (courseQuery.isError || !course || (mode !== 'dialogue' && progressQuery.isError)) return <div className="page-shell"><Header signedIn /><main className="content-column py-14"><QueryError retry={() => { courseQuery.refetch(); progressQuery.refetch(); }} /></main></div>;
   if (mode === 'lecture_questions' && !lecture) return <Redirect to="/" />;
   if (sessionQuery.isError) return <div className="page-shell"><Header signedIn /><main className="content-column py-14"><QueryError retry={() => sessionQuery.refetch()} /></main></div>;
-  if (mode === 'dialogue' && sessionStorage.getItem('basic-tenets-active-test')) {
-    const activeTest = sessionStorage.getItem('basic-tenets-active-test')!;
-    const returnPath = activeTest === 'final_exam' ? '/exam' : `/lecture/${activeTest.split(':')[1]}/questions`;
-    return <div className="page-shell"><Header signedIn /><main className="content-column py-16"><p className="eyebrow text-[#718078] mb-3">Dialogue unavailable</p><h1 className="serif text-3xl mb-4">The professor dialogue is closed during an oral assessment.</h1><p className="text-sm text-[#78817b] mb-7">Return to the active assessment to continue your test.</p><Link href={returnPath} className="primary-action">Return to assessment <ArrowRight size={16} /></Link></main></div>;
-  }
 
   const persistTranscript = async (role: 'student' | 'professor', text: string, context: string) => {
     if (!session || !text.trim()) return;

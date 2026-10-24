@@ -180,7 +180,7 @@ Every question presents a fresh situation. Adjudicate it using the lecture's ide
 1 = Shows some relevant understanding but the application or justification is incomplete or vague; naming the correct concept alone earns at most 1.
 0 = Gives no relevant case-based reasoning, seriously misapplies the concepts, or gives no answer.
 Accept well-supported alternative interpretations. No single hidden motive or diagnosis should be treated as established solely by a short vignette.
-The maximum per lecture is 12 points. The student needs 8 of 12 to unlock the next lecture, and may retry missed questions once.
+The maximum per lecture is 12 points. A score of 8 of 12 marks the lecture as passed. Scores do not restrict access: all lectures, homework assessments, and the final oral exam remain available at all times, with no prerequisites or retry caps.
 
 FINAL ORAL EXAM (5 questions, 60% of final grade)
 Score each answer 0 to 4:
@@ -196,4 +196,4 @@ Pass: at least 70% on the lecture questions (42 of 60) and at least 14 of 20 on 
 Pass with distinction: at least 54 of 60 on the lecture questions and at least 18 of 20 on the final exam.
 Fail: below either threshold.
 Final grade = (lecture-question % x 0.4) + (final-exam % x 0.6).
-Retake: one retake of the final exam, at least 48 hours later, with new scenarios.
+Retakes are available immediately, without an attempt limit or waiting period. Later final-exam attempts request new scenarios; if generation is unavailable, the course's existing exam cases remain accessible.
